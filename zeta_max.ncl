@@ -9,19 +9,21 @@ begin
 	if(.not.isvar("modelstr"))then
 		modelstr = "control"
 	end if
+	stormname = "CHARLEY"
 	modeldir = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/"+modelstr+"/" 
+	modeldir = "/glade/scratch/fossell/ADCIRC/"+stormname+"/"+modelstr+"/" 
 	; modelstr has to be "coldstart_extend" one time - you will get an error but dont worry
 	if(modelstr.eq."NOS")then
 		modeldir = "/glade/scratch/fossell/ADCIRC/NOS/ikr09/NOS_OWI/" ; NOS run
 	end if
-	workdir = "/glade/p/work/ahijevyc/ADCIRC/"+modelstr+"/"
+	workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
 	; zoom level
 	if(.not.isdefined("zoom")) then
 		zoom = 1
 	end if
 
 	res                          = True
-	res = set_res_mp(res, "zoom"+sprintf("%.0f",zoom))
+	res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
 
 	print("opening "+modeldir+"maxele.63.nc")
 	f = addfile(modeldir+"maxele.63.nc","r")
@@ -39,7 +41,7 @@ begin
 	g->areaCell = a->areaCell(k)
 
 	; Read file that lists nodes where surface submergence state is 1
-	sfc_sub_state_file = "/glade/p/work/ahijevyc/ADCIRC/control/surface_submergence_state_14040.txt"
+	sfc_sub_state_file = "/glade/p/work/ahijevyc/ADCIRC/surface_submergence_state_14040.txt"
 	lines = asciiread(sfc_sub_state_file, -1, "integer")
 	inodes = lines(::2) ; asciiread reads 2 columns text into 1-D array; extract 1st column by taking every other one.
 	sfc_sub_state = new(dimsizes(f->zeta_max), "integer")
@@ -64,9 +66,9 @@ begin
 	; Annotate surge station observations from Hal Needham and SURGEDAT project.
 	; csv file is columns K, V, and W from ./observations/Ike_2008.xlsx (copied from pecan:/mmmtmp/ahijevyc Jan 2016) 
 	obs_file = "./observations/Ike_2008_surge_station_obs.csv"
-	obs_file = "./observations/Ike_2008_SURGEDAT.csv"
-	; Ike_2008_USGS_obs.csv created from http://pubs.usgs.gov/of/2008/1365/
-	obs_file = "./observations/Ike_2008_USGS_obs.csv"
+	obs_file = "./"+stormname+"/observations/"+stormname+"_SURGEDAT.csv"
+	; ike_SSS_high_water.csv created by get_USGS_high_water.csh from pubs.usgs.gov/of/2008/1365/downloads
+	;obs_file = "./"+stormname+"/observations/ike_SSS_high_water.csv"
 	outfile = workdir+modelstr+".zoom"+zoom
 	if(isStrSubset(obs_file,"USGS"))then
 		outfile = workdir+modelstr+".USGS.zoom"+zoom
@@ -77,9 +79,6 @@ begin
 	out2 = addfile(outfile+".nc","c")
 	
 	wks = gsn_open_wks("png",outfile)
-	;Iketrack = readAsciiTable("/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/control/IkeTrack.txt",2,"float",0) ; same IkeTrack for control run and NOS
-	; Removed blank line at end that caused warning.
-	Iketrack = readAsciiTable("/glade/p/work/ahijevyc/ADCIRC/observations/IkeTrack.txt",2,"float",0) ; same IkeTrack for control run and NOS
 	trackfile = modeldir+"fort.22"
 	; fort.22 is quite different for the NOS run. it don't have lat/lon of track.
 	if(fileexists(trackfile).and.modelstr.ne."NOS_OWI")then
@@ -199,11 +198,17 @@ begin
 		confidence = x
 		confidence = 3
 	else
-		stormtide_m = tofloat(strs(1:,10))
-		x = tofloat(strs(1:,22))
-		y = tofloat(strs(1:,21))
-		confidence = tofloat(strs(1:,24))
+		skip = 1
+		if(stormname.eq."CHARLEY")then
+			skip=2
+		end if
+		stormtide_m = tofloat(strs(skip:,10))
+		x = tofloat(strs(skip:,22))
+		y = tofloat(strs(skip:,21))
+		siteid = strs(skip:,17)
+		confidence = tofloat(strs(skip:,24))
 	end if
+	print(confidence)
 	obsres = True
 	obsres@gsMarkerIndex = 4
 	obsres@gsMarkerColor = "dark green"
