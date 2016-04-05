@@ -5,7 +5,8 @@ load "/glade/p/work/ahijevyc/ncl/get_length_scale.ncl"
 load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
 
 begin
-
+	; for some reason putting systemfunc("date") in the do loop resulted in random crashes
+	currentdate = systemfunc("date")
 	if(.not.isvar("modelstr"))then
 		modelstr = "control"
 	end if
@@ -22,7 +23,7 @@ begin
 		zoom = 1
 	end if
 
-	res                          = True
+	res = True
 	res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
 
 	print("opening "+modeldir+"maxele.63.nc")
@@ -134,14 +135,10 @@ begin
 
 	res@gsnCenterString          = modelstr
 	res@gsnCenterStringOrthogonalPosF = 0.1
-	res@gsnRightString           = ""
 
 	; Don't advance the frame.
 	res@gsnFrame = False
 
-	res@mpDataBaseVersion     = "HighRes"     ; "MediumRes" will run faster.
-	res@mpLimitMode           = "LatLon"
-	res@mpPerimOn             = False
 	res@pmTickMarkDisplayMode = "Always"    ; Turn on map tickmarks.
 	res@cnConstFLabelOn       = False ; don't say "CONSTANT FIELD - VALUE IS 0"
 	lres                      = True
@@ -325,10 +322,11 @@ begin
 	xyres@xyMarker            = obsres@gsMarkerIndex               ; choose type of marker 
 	xyres@xyMarkerColor       = "dark green"                ; Marker color
 	xyres@xyMarkerSizeF       = obsres@gsMarkerSizeF         ; Marker size (default 0.01)
+	xyres@xyMarkerThicknesses   = (/obsres@gsMarkerThicknessF,1,1/) 
 	xyres@xyDashPatterns      = (/"Solid","Solid","Solid"/)                
 	xyres@xyLineThicknesses   = (/1,1,2/) 
-	xyres@xyMarkerThicknesses   = (/obsres@gsMarkerThicknessF,1,1/) 
 	xyres@xyLineColors        = (/xyres@xyMarkerColor,xyres@xyMarkerColor,"black"/)
+	xyres@xyLabelMode         = "Custom"
 	xyres@gsnShape            = True
 	xyres@trYMinF             = 0.
 	xyres@trXMinF             = 0.
@@ -336,15 +334,36 @@ begin
 	xyres@tiMainString        = "n="+sprintf("%.0f",rc@nptxy)+", r~S~2~N~="+sprintf("%4.2f",r2)+", multiplic. bias="+sprintf("%4.2f",rc@yave/rc@xave)+"~C~scatter index="+sprintf("%4.2f",si) + ", RMSE="+sprintf("%4.2fm",rmse)
 	xyres@tiYAxisString       = modelstr + "~C~" + zeta_max@long_name + "~C~(meters)"
 	xyres@tiXAxisString       = obs_file + "~C~(meters)"
+	
 	plot  = gsn_csm_xy (wks,obs,data,xyres)        ; create plot
 
 	; 2nd page - full page scatterplot
+	; This scatterplot is done differently than first page. Perhaps change first page to be the same as this one.
+	; 1st page scatterplot is an example of multiple y-series sharing the same x-series.
 	xyres@gsnMaximize          = True               ; maximize plot in frame
-	xyres@pmLegendDisplayMode  = "Always"
-	xyres@pmLegendSide         = "Bottom"
-	xyres@xyExplicitLegendLabels = (/"(obs,model)","best-fit","1:1"/)
-	xyres@xyExplicitLabels     = xyres@xyExplicitLegendLabels
-	plot  = gsn_csm_xy (wks,obs,data,xyres)        ; create plot
+	xyres@gsnDraw = False
+	xyres@gsnFrame = False
+	plot  = gsn_csm_xy (wks,obs,model,xyres)        ; create plot
+	getvalues plot
+		"trXMaxF" : xmax
+	end getvalues
+	xrange = (/ xyres@trXMinF, xmax /)
+	xyres@xyExplicitLabels = "best-fit"
+	xyres@xyMarkLineMode     = "Lines"
+	xyres@xyLineColor        = xyres@xyMarkerColor
+	delete(xyres@xyLineColors)
+	delete(xyres@xyMarkerThicknesses)
+	delete(xyres@xyLineThicknesses)
+	delete(xyres@xyMarkLineModes)
+	print(xyres)
+	best_fit = gsn_csm_xy(wks, xrange, rc*xrange + rc@yintercept,xyres) 
+	xyres@xyExplicitLabels = "1:1"
+	xyres@xyLineColor        = "black"
+	one2one  = gsn_csm_xy(wks, xrange, xrange, xyres)
+	overlay(plot,best_fit)
+	overlay(plot,one2one)
+	draw(plot)
+	frame(wks) 
 
 	; IKE landfall coordinates and heading in control run.
 	clat = 29.3
