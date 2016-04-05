@@ -4,6 +4,7 @@ load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/contributed.ncl"
 load "$NCARG_ROOT/lib/ncarg/nclscripts/contrib/time_axis_labels.ncl"
 load "/glade/p/work/ahijevyc/ncl/date_str.ncl"
 load "/glade/p/work/ahijevyc/ncl/get_length_scale.ncl"
+load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/p/work/ahijevyc/ncl/CreateTracks.ncl"
 
 begin
@@ -12,12 +13,25 @@ begin
 	if(.not.isvar("modelstr"))then
 		modelstr = "control"
 	end if
+	if(.not.isvar("stride"))then
+		stride=2
+	end if
+	stormname = "CHARLEY"
 	idir = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/"+modelstr+"/" 
+	idir = "/glade/scratch/fossell/ADCIRC/"+stormname+"/"+modelstr+"/" 
 	; modelstr has to be "coldstart_extend" one time - you will get an error but dont worry
-	workdir = "/glade/p/work/ahijevyc/ADCIRC/"+modelstr+"/"
+	workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
+	; zoom level
+	if(.not.isdefined("zoom")) then
+		zoom = 2
+	end if
 	if(.not.isvar("notide"))then
 		notide = False
 	end if
+
+	res = True
+	res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
+
 	left_percentile   = 2.5
 	right_percentile = 97.5
 	thresh = 1. ; inundation threshold
@@ -25,21 +39,10 @@ begin
 
 	f = addfile(idir+"fort.63.nc","r")
 
-	MinLonF = -99.
-	MaxLonF = -87.
-	MinLatF =  25.
-	MaxLatF =  31.
-	if (str_get_cols(modelstr,-6,-1).eq."scaled") then
-		print("zooming out")
-		MaxLonF = -85.
-		MinLatF =  21.
-	end if
-	stride=10
 	LabelFontHeightF    =   0.0
-	GeophysicalLineThicknessF = 1 
-	domain_string = sprintf("%.1fE", MinLonF) + sprintf("%.1fE", MaxLonF) + sprintf("%.1fN", MinLatF) + sprintf("%.1fN", MaxLatF)
+	domain_string = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF)
 
-	k = ind(f->x .ge.MinLonF.and.f->x .le.MaxLonF.and.f->y .ge.MinLatF.and.f->y .le.MaxLatF)
+	k = ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
 	k := k(::stride)
  
 	; cut out needed nodes for smaller file
@@ -56,7 +59,7 @@ begin
 		g->areaCell = a->areaCell(k)
 
 		; Read file that lists nodes where surface submergence state is 1
-		sfc_sub_state_file = "/glade/p/work/ahijevyc/ADCIRC/control/surface_submergence_state_14040.txt"
+		sfc_sub_state_file = "/glade/p/work/ahijevyc/ADCIRC/surface_submergence_state_14040.txt"
 		lines = asciiread(sfc_sub_state_file, -1, "integer")
 		; asciiread() reads into a 1-D array. the file is 2 columns, so read every other one, starting with element zero 
 		; to get the first column. These are the inodes. 
@@ -101,51 +104,49 @@ begin
 		print("subtracted tide")
 	end if
 
-	station_obs_file = "./observations/CO-OPS__8768094__wl.csv"
-	lines := asciiread(station_obs_file, -1, "string")
-	delim = ","
-	DateTimeObs =         str_get_field(lines,1,delim)
-	WaterLevel  = tofloat(str_get_field(lines,2,delim))
-	Quality     =         str_get_field(lines,8,delim)
-	year  = tointeger(str_get_cols(DateTimeObs, 0, 3))
-	month = tointeger(str_get_cols(DateTimeObs, 5, 6))
-	day   = tointeger(str_get_cols(DateTimeObs, 8, 9))
-	hour  = tointeger(str_get_cols(DateTimeObs,11,12))
-	minute= tointeger(str_get_cols(DateTimeObs,14,15))
-	second=minute
-	second=0
-	; There is a bug in cd_inv_calendar. Use ut_inv_calendar.
-	; See https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=4&ved=0CDUQFjADahUKEwjzrKzsy7_IAhUW-2MKHR3FBKE&url=http%3A%2F%2Fmailman.ucar.edu%2Fpipermail%2Fncl-talk%2F2015-July%2F003428.html&usg=AFQjCNHat_z7xtV2q_LT817CbN7e6avfWQ
-	station_obs_time = ut_inv_calendar(year, month, day, hour, minute, second, station_time@units, 0)
-	print("interpolating observed station water level to f->time")
-	station_obs = int2p_Wrap(station_obs_time, WaterLevel, f->time, 1)
-
-	trackfile = idir+"fort.22"
-	if(fileexists(trackfile))then
-		lines := asciiread(trackfile,-1,"string")
+	station_obs_file = "./"+stormname+"/observations/CO-OPS__8768094__wl.csv"
+	if(fileexists(station_obs_file))then
+		lines := asciiread(station_obs_file, -1, "string")
 		delim = ","
-		tracklon = -1 * tofloat(str_get_field(lines, 8, delim))/10.
-		tracklat = tofloat(str_get_field(lines, 7, delim))/10.
-		tt := str_get_field(lines, 3, delim)
-		year   := tointeger(str_get_cols(tt, 1, 4))
-		month  := tointeger(str_get_cols(tt, 5, 6))
-		day    := tointeger(str_get_cols(tt, 7, 8))
-		hour   := tointeger(str_get_cols(tt, 9,10))
-		minute := hour
-		minute = 0
-		second := hour
-		second = 0
-		tracktime = ut_inv_calendar(year, month, day, hour, minute, second, station_time@units, 0)
-		trackheading := tofloat(str_get_field(lines, 26, delim))
-		trackI := sin(trackheading/180*3.141592)
-		trackJ := cos(trackheading/180*3.141592)
-		vmax   := tofloat(str_get_field(lines, 9, delim))
-		rad    := tofloat(str_get_field(lines, 12, delim))
+		DateTimeObs =         str_get_field(lines,1,delim)
+		WaterLevel  = tofloat(str_get_field(lines,2,delim))
+		Quality     =         str_get_field(lines,8,delim)
+		year  = tointeger(str_get_cols(DateTimeObs, 0, 3))
+		month = tointeger(str_get_cols(DateTimeObs, 5, 6))
+		day   = tointeger(str_get_cols(DateTimeObs, 8, 9))
+		hour  = tointeger(str_get_cols(DateTimeObs,11,12))
+		minute= tointeger(str_get_cols(DateTimeObs,14,15))
+		second=minute
+		second=0
+		; There is a bug in cd_inv_calendar. Use ut_inv_calendar.
+		; See https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=4&ved=0CDUQFjADahUKEwjzrKzsy7_IAhUW-2MKHR3FBKE&url=http%3A%2F%2Fmailman.ucar.edu%2Fpipermail%2Fncl-talk%2F2015-July%2F003428.html&usg=AFQjCNHat_z7xtV2q_LT817CbN7e6avfWQ
+		station_obs_time = ut_inv_calendar(year, month, day, hour, minute, second, station_time@units, 0)
+		print("interpolating observed station water level to f->time")
+		station_obs = int2p_Wrap(station_obs_time, WaterLevel, f->time, 1)
 	end if
 
+	trackfile = idir+"fort.22"
+	lines := asciiread(trackfile,-1,"string")
+	delim = ","
+	tracklon = -1 * tofloat(str_get_field(lines, 8, delim))/10.
+	tracklat = tofloat(str_get_field(lines, 7, delim))/10.
+	tt := str_get_field(lines, 3, delim)
+	year   := tointeger(str_get_cols(tt, 1, 4))
+	month  := tointeger(str_get_cols(tt, 5, 6))
+	day    := tointeger(str_get_cols(tt, 7, 8))
+	hour   := tointeger(str_get_cols(tt, 9,10))
+	minute := hour
+	minute = 0
+	second := hour
+	second = 0
+	tracktime = ut_inv_calendar(year, month, day, hour, minute, second, station_time@units, 0)
+	trackheading := tofloat(str_get_field(lines, 26, delim))
+	trackI := sin(trackheading/180*3.141592)
+	trackJ := cos(trackheading/180*3.141592)
+	vmax   := tofloat(str_get_field(lines, 9, delim))
+	rad    := tofloat(str_get_field(lines, 12, delim))
+
 	ntime = dimsizes(zeta&time)
-	nnodes = dimsizes(zeta)
-	nnodes := nnodes(1)
 	depth = f->depth
 	nnodes = dimsizes(depth)
 	sfc_sub_state := f->sfc_sub_state
@@ -155,7 +156,6 @@ begin
 	areaCell := f->areaCell * Re^2. * stride
 
 	gsn_define_colormap(wks,"WhiteBlueGreenYellowRed")
-	res                          = True
 	res@gsnDraw                  = False
 	res@gsnFrame                 = False
 	res@cnLevelSelectionMode     = "ManualLevels"
@@ -188,14 +188,6 @@ begin
 	res@cnLineLabelPlacementMode = "Constant"
 	res@cnLineLabelFontHeightF   = LabelFontHeightF
 	res@lbLabelAutoStride        = True
-	res@mpDataBaseVersion        = "HighRes" ; "MediumRes" will run faster.
-	res@mpLimitMode              = "LatLon"
-	res@mpMinLonF                = MinLonF
-	res@mpMaxLonF                = MaxLonF
-	res@mpMinLatF                = MinLatF
-	res@mpMaxLatF                = MaxLatF
-	res@mpPerimOn                = True
-	res@mpGeophysicalLineThicknessF = GeophysicalLineThicknessF
 	res@pmTickMarkDisplayMode    = "Always"    ; Turn on map tickmarks.
 	res@mpFillOn                 = False
 
@@ -228,14 +220,8 @@ begin
 	resTick                = True
 	resTick@ttmFormat      = "%d %c"
 	resTick@ttmAxis        = "XB"
-	resTick@ttmValues      = (/ (/ 2008, 9,  7, 0, 0, 0 /), \
-		                    (/ 2008, 9,  8, 0, 0, 0 /), \
-		                    (/ 2008, 9,  9, 0, 0, 0 /), \
-		                    (/ 2008, 9, 10, 0, 0, 0 /), \
-		                    (/ 2008, 9, 11, 0, 0, 0 /), \
-		                    (/ 2008, 9, 12, 0, 0, 0 /), \
-		                    (/ 2008, 9, 13, 0, 0, 0 /), \
-		                    (/ 2008, 9, 14, 0, 0, 0 /) /)
+	resTick@ttmMajorStride = 48
+	resTick@ttmMinorStride = 12
 	time_axis_labels(f->time, sres, resTick)
  
 	control_timeseries_file := str_sub_str(timeseries_file,modelstr,"control")
@@ -322,7 +308,7 @@ begin
 	end if
 
 	first_frame = True
-	do itime=itime,itime;250,ntime-1,1
+	do itime=itime,itime;210,ntime-1,1
 		; Vertical line at current time
 		sres@gsnXRefLine = f->time(itime)
 		sres@gsnRightString = date_str1(itime) 
@@ -331,9 +317,12 @@ begin
 		; Get current lat/lon of storm, interpolating fort.22
 		; Find first track time later than frame time, tracki
 		tracki = min(ind(tracktime .ge. f->time(itime)))
-		if(rad(tracki).ne.34)then
+		if(rad(tracki).ne.34.and.rad(tracki).ne.0)then
 			; sanity check; tracki should correspond to a rad=34kt line and tracki-1 to a 34, 50, or 64kt line.
+			; This was true for Ike, but not Charley, in Charley there are 0kt lines (with no accompanying 34kt lines).
 			print("unexpected wind intensity threshold in fort.22 file")
+			print(tostring(rad(tracki)))
+			print(date_str(tracktime(tracki)))
 			exit
 		end if
 		; Get time interval between tracki and tracki-1 and fraction of time past by frame time
@@ -378,11 +367,17 @@ begin
 		; added thresh threshold Feb 23, 2016. only count nodes where inundation exceeds this depth.
 		; Set volumes to zero where inundation depth is less than threshold.
 		; This affects length scale, average depth, total inundation volume, inundation area...
-		volume = where(inundation.ge.thresh,volume,0.) 
+		printMinMax(inundation,False)
+		volume = where(.not.ismissing(inundation).and.inundation.ge.thresh,volume,0.) 
 		;tmp := maxind(volume)
-		;print("max inundation areaCell="+tostring(areaCell(tmp))+"sq km, inundation="+tostring(inundation(tmp))+"m, volume="+tostring(volume(tmp))+" "+tostring(res@sfXArray(tmp))+"E "+tostring(res@sfYArray(tmp))+"N")
+		;print("max inundation node in domain: areaCell="+tostring(areaCell(tmp))+"sq km, inundation="+tostring(inundation(tmp))+"m, "+tostring(res@sfXArray(tmp))+"E "+tostring(res@sfYArray(tmp))+"N")
+		if(sum(volume).eq.0)then
+			print("no inundation above threshold. skipping time.")
+			continue
+		end if
 		left_length_km  = get_length_scale(volume,dist_right, left_percentile/100.)
 		right_length_km = get_length_scale(volume,dist_right, right_percentile/100.)
+		g->length_scale(itime) = right_length_km - left_length_km
 		; Draw LS contours (left and right sides)
 		LSres = True
 		LSres@gsnDraw = False
@@ -423,11 +418,10 @@ begin
 		end if
 		; Use (/ /) to avoid creating degenerate (1-element) dimensions like 'ncl137'
 		g->volume_in_ctrl(itime) = (/ volume_in_ctrl(itime) /)
-		g->length_scale(itime) = right_length_km - left_length_km
 
 		if(.not.first_frame)then
-			print("not drawing this frame")
-			continue
+			;print("not drawing this frame")
+			;continue
 		end if
 		first_frame = False
 
@@ -454,7 +448,7 @@ begin
 		storm_center_res@gsMarkerIndex = create_hurricane_symbol(wks,tracklat0,vmax0)
 		storm_center := gsn_add_polymarker(wks,map,tracklon0,tracklat0,storm_center_res)
 		vmax_res = True
-		vmax_res@txFontHeightF = 0.01 + vmax0/6000.
+		vmax_res@txFontHeightF = 0.02
 		vmax_res@txFontOpacityF = 0.7
 		storm_center_vmax := gsn_add_text(wks,map,sprintf("%.0fkt",vmax0),tracklon0,tracklat0,vmax_res)
 
