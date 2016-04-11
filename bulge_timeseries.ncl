@@ -23,13 +23,13 @@ begin
 	if(stormname.eq."IKE")then
 		idir = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/"+modelstr+"/" 
 	end if
-	; modelstr has to be "coldstart_extend" one time - you will get an error but dont worry
 	workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
 	; zoom level
 	if(.not.isdefined("zoom")) then
 		zoom = 2
 	end if
 	if(.not.isvar("notide"))then
+		; if notide, modelstr has to be "coldstart_extend" one time - you will get an error but dont worry
 		notide = False
 	end if
 
