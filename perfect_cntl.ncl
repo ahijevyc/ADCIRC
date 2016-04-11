@@ -11,10 +11,15 @@ begin
 	if(.not.isvar("modelstr"))then
 		modelstr = "control"
 	end if
-	stormname = "CHARLEY"
-	modeldir = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/"+modelstr+"/" 
+	if(.not.isvar("stormname"))then
+		stormname = "CHARLEY"
+	end if
 	modeldir = "/glade/scratch/fossell/ADCIRC/"+stormname+"/"+modelstr+"/" 
 	obsdir = "/glade/scratch/fossell/ADCIRC/"+stormname+"/control/" 
+	if(stormname.eq."IKE")then
+		modeldir = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/"+modelstr+"/" 
+		obsdir   = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/control/" 
+	end if
 	workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
 	; zoom level
 	if(.not.isdefined("zoom")) then
@@ -29,8 +34,8 @@ begin
 
 	k = ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
 
-	obs_file   = "."+"control"+".zoom"+zoom+".nc" ; temporary small grid
-	model_file = "."+ modelstr+".zoom"+zoom+".nc" ; temporary small grid
+	obs_file   = "/tmp/"+stormname+  ".control"+".zoom"+zoom+".nc" ; temporary mesh zoomed to lat/lon bounds
+	model_file = "/tmp/"+stormname+"."+modelstr+".zoom"+zoom+".nc" ; used later in script
 	files = (/ obs_file, model_file /)
 	full_files = (/ obsdir, modeldir /) + "maxele.63.nc"
 
@@ -43,6 +48,8 @@ begin
 	; The sfc_sub_state_file lists node indices where indices are 1-based.  But ncl is zero-based.  So subtract one from the node indices.
 	sfc_sub_state(inodes-1) = 1
 	sfc_sub_state := sfc_sub_state(k)
+
+	; loop through obs (i=0) and model (i=1)
 	do i=0,1
 		system("rm -v "+files(i)) 
 		g = addfile(files(i),"c")
