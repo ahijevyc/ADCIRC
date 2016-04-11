@@ -16,9 +16,13 @@ begin
 	if(.not.isvar("stride"))then
 		stride=2
 	end if
-	stormname = "CHARLEY"
-	idir = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/"+modelstr+"/" 
+	if(.not.isvar("stormname"))then
+		stormname = "CHARLEY"
+	end if
 	idir = "/glade/scratch/fossell/ADCIRC/"+stormname+"/"+modelstr+"/" 
+	if(stormname.eq."IKE")then
+		idir = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/"+modelstr+"/" 
+	end if
 	; modelstr has to be "coldstart_extend" one time - you will get an error but dont worry
 	workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
 	; zoom level
@@ -308,7 +312,7 @@ begin
 	end if
 
 	first_frame = True
-	do itime=itime,itime;210,ntime-1,1
+	do itime=210,ntime-1,1
 		; Vertical line at current time
 		sres@gsnXRefLine = f->time(itime)
 		sres@gsnRightString = date_str1(itime) 
@@ -420,8 +424,8 @@ begin
 		g->volume_in_ctrl(itime) = (/ volume_in_ctrl(itime) /)
 
 		if(.not.first_frame)then
-			;print("not drawing this frame")
-			;continue
+			print("not drawing this frame")
+			continue
 		end if
 		first_frame = False
 
