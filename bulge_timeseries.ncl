@@ -26,7 +26,7 @@ begin
 	workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
 	; zoom level
 	if(.not.isdefined("zoom")) then
-		zoom = 2
+		zoom = 1
 	end if
 	if(.not.isvar("notide"))then
 		; if notide, modelstr has to be "coldstart_extend" one time - you will get an error but dont worry
@@ -41,20 +41,30 @@ begin
 	thresh = 1. ; inundation threshold
 	thresh_string = sprintf("%4.2fm", thresh)
 
-	f = addfile(idir+"fort.63.nc","r")
+	f63 = idir+"fort.63.nc"
+	print("opening "+f63)
+	f = addfile(f63,"r")
 
 	LabelFontHeightF    =   0.0
 	domain_string = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF)
 
-	k = ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
+	k =   ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
 	k := k(::stride)
+	if(any(ismissing(k)))then
+		print("no nodes in zoom domain?")
+		printMinMax(f->x,False)
+		printMinMax(f->y,False)
+		print(res)
+		exit
+	end if
  
 	; cut out needed nodes for smaller file
 	sm_fort63 = workdir+"fort.63."+sprintf("stride%02.0f.",stride)+domain_string
 	if(.not.isfilepresent(sm_fort63+".nc")) then
-		system("rm -vf "+sm_fort63+".nc") 
+		print(systemfunc("rm -vf "+sm_fort63+".nc") )
 		g = addfile(sm_fort63+".nc","c")
 		; Thin zeta, depth, x, y, and areaCell.
+		printVarSummary(f->zeta)
 		g->zeta = f->zeta(:,k)
 		g->depth = f->depth(k)
 		g->x = f->x(k)
@@ -130,6 +140,7 @@ begin
 	end if
 
 	trackfile = idir+"fort.22"
+	print("reading "+trackfile)
 	lines := asciiread(trackfile,-1,"string")
 	delim = ","
 	tracklon = -1 * tofloat(str_get_field(lines, 8, delim))/10.
