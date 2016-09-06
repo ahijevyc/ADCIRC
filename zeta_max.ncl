@@ -10,12 +10,8 @@ begin
 	if(.not.isvar("modelstr"))then
 		modelstr = "control"
 	end if
-	stormname = "CHARLEY"
-	modeldir = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/"+modelstr+"/" 
-	modeldir = "/glade/scratch/fossell/ADCIRC/"+stormname+"/"+modelstr+"/" 
-	; modelstr has to be "coldstart_extend" one time - you will get an error but dont worry
-	if(modelstr.eq."NOS")then
-		modeldir = "/glade/scratch/fossell/ADCIRC/NOS/ikr09/NOS_OWI/" ; NOS run
+	if(.not.isvar("stormname"))then
+		stormname = "CHARLEY"
 	end if
 	workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
 	; zoom level
@@ -26,8 +22,8 @@ begin
 	res = True
 	res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
 
-	print("opening "+modeldir+"maxele.63.nc")
-	f = addfile(modeldir+"maxele.63.nc","r")
+	print("opening "+workdir+"maxele.63.nc")
+	f = addfile(workdir+"maxele.63.nc","r")
 
 	k = ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
 	sm = "."+modelstr+".zoom"+zoom ; temporary small grid
@@ -69,9 +65,9 @@ begin
 	obs_file = "./observations/Ike_2008_surge_station_obs.csv"
 	obs_file = "./"+stormname+"/observations/"+stormname+"_SURGEDAT.csv"
 	; ike_SSS_high_water.csv created by get_USGS_high_water.csh from pubs.usgs.gov/of/2008/1365/downloads
-	;obs_file = "./"+stormname+"/observations/ike_SSS_high_water.csv"
+	obs_file = "./"+stormname+"/observations/"+stormname+"_SSS_high_water.csv"
 	outfile = workdir+modelstr+".zoom"+zoom
-	if(isStrSubset(obs_file,"USGS"))then
+	if(isStrSubset(obs_file,"_SSS_"))then
 		outfile = workdir+modelstr+".USGS.zoom"+zoom
 	end if
 	if(isfilepresent(outfile+".nc"))then
@@ -80,7 +76,7 @@ begin
 	out2 = addfile(outfile+".nc","c")
 	
 	wks = gsn_open_wks("png",outfile)
-	trackfile = modeldir+"fort.22"
+	trackfile = workdir+"fort.22"
 	; fort.22 is quite different for the NOS run. it don't have lat/lon of track.
 	if(fileexists(trackfile).and.modelstr.ne."NOS_OWI")then
 		print("reading "+trackfile)
@@ -187,7 +183,7 @@ begin
 	print("reading "+obs_file)
 	lines := asciiread(obs_file, -1, "string")
 	strs = str_split_csv(lines, ",", 0)
-	if(isStrSubset(obs_file,"USGS"))then
+	if(isStrSubset(obs_file,"_SSS_"))then
 		stormtide_m = tofloat(strs(:,0))
 		x = tofloat(strs(:,2))
 		y = tofloat(strs(:,1))
@@ -366,29 +362,29 @@ begin
 	frame(wks) 
 
 	; IKE landfall coordinates and heading in control run.
-	clat = 29.3
-	clon = -94.7
-	trackJ0 =  30.81772
-	trackI0 =  -95.39713
-	dist := gc_latlon(res@sfYArray,res@sfXArray,onedtond(clat,dimsizes(res@sfYArray)),onedtond(clon,dimsizes(res@sfXArray)),2,-4)
-	lat :=  transpose( (/ onedtond(clat,dimsizes(res@sfYArray)), onedtond(trackJ0,dimsizes(res@sfYArray)), res@sfYArray /) )
-	lon :=  transpose( (/ onedtond(clon,dimsizes(res@sfXArray)), onedtond(trackI0,dimsizes(res@sfXArray)), res@sfXArray /) )
-	LorR := gc_dangle(lat,lon)
-	dist_right = dist * -sin(LorR/180.*3.141592)
+	;clat = 29.3
+	;clon = -94.7
+	;trackJ0 =  30.81772
+	;trackI0 =  -95.39713
+	;dist := gc_latlon(res@sfYArray,res@sfXArray,onedtond(clat,dimsizes(res@sfYArray)),onedtond(clon,dimsizes(res@sfXArray)),2,-4)
+	;lat :=  transpose( (/ onedtond(clat,dimsizes(res@sfYArray)), onedtond(trackJ0,dimsizes(res@sfYArray)), res@sfYArray /) )
+	;lon :=  transpose( (/ onedtond(clon,dimsizes(res@sfXArray)), onedtond(trackI0,dimsizes(res@sfXArray)), res@sfXArray /) )
+	;LorR := gc_dangle(lat,lon)
+	;dist_right = dist * -sin(LorR/180.*3.141592)
 
 	; Only count nodes within ctrl. 
 	volumes = areaCell/1000.*inundation
-	icontrol = ind(volumes.ge.0.and.dist_right.ge.62.and.dist_right.lt.285)
-	in_control_zone = 0
-	if(.not.any(ismissing(icontrol)))then
-		printVarSummary(in_control_zone)
-		print(sum(volumes(icontrol)))
-		in_control_zone := sum(volumes(icontrol))
-	end if
+	;icontrol = ind(volumes.ge.0.and.dist_right.ge.62.and.dist_right.lt.285)
+	;in_control_zone = 0
+	;if(.not.any(ismissing(icontrol)))then
+	;	printVarSummary(in_control_zone)
+	;	print(sum(volumes(icontrol)))
+	;	in_control_zone := sum(volumes(icontrol))
+	;end if
 
 	res@sfDataArray      = inundation
-	title = "inundation swath volume in domain = "+sprintf("%.1f", sum(volumes))+" km~S~3~N~~C~"+\
-		"in control inundation swath (pink) = "+sprintf("%.1f", in_control_zone) + " km~S~3~N~"
+	title = "inundation swath volume in domain = "+sprintf("%.1f", sum(volumes))+" km~S~3~N~"
+	; title = title + "~C~in control inundation swath (pink) = "+sprintf("%.1f", in_control_zone) + " km~S~3~N~"
 	map := gsn_csm_contour_map(wks,inundation,res)
 	if(zoom.ge.3) then
 		tmp := ind(inundation.ge.0.5)
@@ -402,14 +398,14 @@ begin
 	end if
 
 	; Dot nodes 
-	ssres                  = True
-	ssres@gsMarkerColor    = "pink"
-	ssres@gsMarkerIndex    = 1
-	ssres@gsMarkerSizeF    = 0.005
-	ssres@gsMarkerOpacityF = 0.05
-	if(.not.any(ismissing(icontrol)))then
-		gsn_polymarker(wks,map,res@sfXArray(icontrol),res@sfYArray(icontrol),ssres)
-	end if
+	;ssres                  = True
+	;ssres@gsMarkerColor    = "pink"
+	;ssres@gsMarkerIndex    = 1
+	;ssres@gsMarkerSizeF    = 0.005
+	;ssres@gsMarkerOpacityF = 0.05
+	;if(.not.any(ismissing(icontrol)))then
+	;	gsn_polymarker(wks,map,res@sfXArray(icontrol),res@sfYArray(icontrol),ssres)
+	;end if
 
 	; define array of volume fraction thresholds (0-1) to plot
 	;fracts = (/ 0.9, 0.95, 0.99 /)
