@@ -12,13 +12,15 @@ begin
 		modelstr = "control"
 	end if
 	if(.not.isvar("stormname"))then
-		stormname = "CHARLEY"
+		stormname = "IKE"
 	end if
-	modeldir = "/glade/scratch/fossell/ADCIRC/"+stormname+"/"+modelstr+"/" 
-	obsdir = "/glade/scratch/fossell/ADCIRC/"+stormname+"/control/" 
+	basedir = "/glade/scratch/fossell/ADCIRC/"
+	basedir = "/glade/scratch/ahijevyc/adcirc/"
+	modeldir = basedir + stormname+"/"+modelstr+"/" 
+	obsdir   = basedir + stormname+"/control/" 
 	if(stormname.eq."IKE")then
-		modeldir = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/"+modelstr+"/" 
-		obsdir   = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/control/" 
+		modeldir = basedir + "ike/nos_grid/v51_additive_perts/"+modelstr+"/" 
+		obsdir   = basedir + "ike/nos_grid/v51_additive_perts/control/" 
 	end if
 	workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
 	; zoom level
