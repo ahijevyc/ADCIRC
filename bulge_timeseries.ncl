@@ -13,15 +13,20 @@ begin
 	if(.not.isvar("modelstr"))then
 		modelstr = "control"
 	end if
+	if(.not.isvar("stormname"))then
+		stormname = "IKE"
+	end if
 	if(.not.isvar("stride"))then
 		stride=2
-	end if
-	if(.not.isvar("stormname"))then
-		stormname = "CHARLEY"
+		if(stormname.eq."IKE")then
+			stride=10
+		end if
 	end if
 	idir = "/glade/scratch/fossell/ADCIRC/"+stormname+"/"+modelstr+"/" 
+	idir = "/glade/scratch/ahijevyc/adcirc/"+stormname+"/"+modelstr+"/" 
 	if(stormname.eq."IKE")then
 		idir = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/"+modelstr+"/" 
+		idir = "/glade/scratch/ahijevyc/adcirc/ike/nos_grid/v51_additive_perts/"+modelstr+"/" 
 	end if
 	workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
 	; zoom level
@@ -38,7 +43,7 @@ begin
 
 	left_percentile   = 2.5
 	right_percentile = 97.5
-	thresh = 1. ; inundation threshold
+	thresh = 0.5 ; inundation threshold
 	thresh_string = sprintf("%4.2fm", thresh)
 
 	f63 = idir+"fort.63.nc"
@@ -241,6 +246,7 @@ begin
  
 	control_timeseries_file := str_sub_str(timeseries_file,modelstr,"control")
 	if(.not.fileexists(control_timeseries_file).and.modelstr.ne."control")then
+		print("didn't find "+control_timeseries_file)
 		print("control timeseries file doesn't exist yet. make it.")
 	end if
 	c := addfile(control_timeseries_file,"r")
@@ -460,7 +466,7 @@ begin
 			overlay(map, LS)
 		end do
 
-		storm_center_res@gsMarkerIndex = create_hurricane_symbol(wks,tracklat0,vmax0)
+		storm_center_res@gsMarkerIndex = create_tropical_symbol(wks,tracklat0,vmax0)
 		storm_center := gsn_add_polymarker(wks,map,tracklon0,tracklat0,storm_center_res)
 		vmax_res = True
 		vmax_res@txFontHeightF = 0.02
