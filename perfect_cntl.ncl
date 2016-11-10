@@ -274,7 +274,9 @@ begin
 	xyres@gsnShape            = True
 	xyres@trYMinF             = 0.
 	xyres@trXMinF             = 0.
-
+	; Can we calculate bias this way? In the ADCIRC, water level (zeta) is defined for one point in one run and 
+	; missing in another run. We need xave and yave to be over the same set of points.
+	; Yes. In zeta_max.ncl, I replaced missing values with zero. So yave and xave are over the same set of points.
 	xyres@tiMainString        = "n="+sprintf("%.0f",rc@nptxy)+", r~S~2~N~="+sprintf("%4.2f",r2)+", multiplic. bias="+sprintf("%4.2f",rc@yave/rc@xave)+"~C~scatter index="+sprintf("%4.2f",si) + ", RMSE="+sprintf("%4.2fm",rmse)
 	xyres@tiYAxisString       = modelstr + "~C~(m inundation over land)"
 	xyres@tiXAxisString       = obs_file
