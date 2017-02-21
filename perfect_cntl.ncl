@@ -51,11 +51,15 @@ begin
 	sfc_sub_state(inodes-1) = 1
 	sfc_sub_state := sfc_sub_state(k)
 
-	; loop through obs (i=0) and model (i=1)
+	; loop through control (i=0) and model (i=1)
 	do i=0,1
+		; Read zeta_max, depth, x, y, and areaCell from full-field file.
+		; Trim domain and derive inundation.
 		system("rm -v "+files(i)) 
 		g = addfile(files(i),"c")
 		f = addfile(full_files(i),"r")
+		; Trim zeta_max, depth, x, y, areaCell to indices where k=True (lat/lon conditions above)
+		; Saved trimmed variables to ncl file variable "g"
 		g->zeta_max = f->zeta_max(k)
 		g->depth = f->depth(k)
 		g->x = f->x(k)
