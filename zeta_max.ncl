@@ -8,10 +8,10 @@ begin
 	; for some reason putting systemfunc("date") in the do loop resulted in random crashes
 	currentdate = systemfunc("date")
 	if(.not.isvar("modelstr"))then
-		modelstr = "control"
+		modelstr = "control_nws20"
 	end if
 	if(.not.isvar("stormname"))then
-		stormname = "CHARLEY"
+		stormname = "MATTHEW"
 	end if
 	workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
 	; zoom level
