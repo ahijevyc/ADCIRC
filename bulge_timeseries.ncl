@@ -1,6 +1,3 @@
-load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_code.ncl"
-load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_csm.ncl"
-load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/contributed.ncl"
 load "$NCARG_ROOT/lib/ncarg/nclscripts/contrib/time_axis_labels.ncl"
 load "/glade/p/work/ahijevyc/ncl/date_str.ncl"
 load "/glade/p/work/ahijevyc/ncl/get_length_scale.ncl"
@@ -14,7 +11,7 @@ begin
 		modelstr = "control"
 	end if
 	if(.not.isvar("stormname"))then
-		stormname = "IKE"
+		stormname = "MATTHEW"
 	end if
 	if(.not.isvar("stride"))then
 		stride=2
@@ -23,7 +20,6 @@ begin
 		end if
 	end if
 	idir = "/glade/scratch/fossell/ADCIRC/"+stormname+"/"+modelstr+"/" 
-	idir = "/glade/scratch/ahijevyc/adcirc/"+stormname+"/"+modelstr+"/" 
 	if(stormname.eq."IKE")then
 		idir = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/"+modelstr+"/" 
 		idir = "/glade/scratch/ahijevyc/adcirc/ike/nos_grid/v51_additive_perts/"+modelstr+"/" 
@@ -245,6 +241,7 @@ begin
 	time_axis_labels(f->time, sres, resTick)
  
 	control_timeseries_file := str_sub_str(timeseries_file,modelstr,"control")
+	print("control_timeseries_file="+control_timeseries_file)
 	if(.not.fileexists(control_timeseries_file).and.modelstr.ne."control")then
 		print("didn't find "+control_timeseries_file)
 		print("control timeseries file doesn't exist yet. make it.")
@@ -329,7 +326,7 @@ begin
 	end if
 
 	first_frame = True
-	do itime=210,ntime-1,1
+	do itime=0,ntime-1,1
 		; Vertical line at current time
 		sres@gsnXRefLine = f->time(itime)
 		sres@gsnRightString = date_str1(itime) 
@@ -441,8 +438,8 @@ begin
 		g->volume_in_ctrl(itime) = (/ volume_in_ctrl(itime) /)
 
 		if(.not.first_frame)then
-			print("not drawing this frame")
-			continue
+			;print("not drawing this frame")
+			;continue
 		end if
 		first_frame = False
 
