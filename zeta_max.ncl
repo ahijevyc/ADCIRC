@@ -34,7 +34,7 @@ begin
 	g->x = f->x(k)
 	g->y = f->y(k)
 	; get area asssociated with each node (file created by Michael Duda)
-	a = addfile("/glade/p/work/ahijevyc/ADCIRC/duda/adcirc_Ike_tri_mesh.nc","r")
+	a = addfile("/glade/p/work/ahijevyc/ADCIRC/duda/NOS_cells.nc","r")
 	g->areaCell = a->areaCell(k)
 
 	; Read file that lists nodes where surface submergence state is 1

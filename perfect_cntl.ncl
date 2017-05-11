@@ -41,7 +41,7 @@ begin
 	files = (/ obs_file, model_file /)
 	full_files = (/ obsdir, modeldir /) + "maxele.63.nc"
 
-	a = addfile("/glade/p/work/ahijevyc/ADCIRC/duda/adcirc_Ike_tri_mesh.nc","r")
+	a = addfile("/glade/p/work/ahijevyc/ADCIRC/duda/NOS_cells.nc","r")
 	; Read file that lists nodes where surface submergence state is 1
 	sfc_sub_state_file = "/glade/p/work/ahijevyc/ADCIRC/surface_submergence_state_14040.txt"
 	lines = asciiread(sfc_sub_state_file, -1, "integer")
