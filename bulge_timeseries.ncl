@@ -1,8 +1,11 @@
 load "$NCARG_ROOT/lib/ncarg/nclscripts/contrib/time_axis_labels.ncl"
+load "$NCARG_ROOT/lib/ncarg/nclscripts/contrib/cd_string.ncl"
+load "/glade/p/work/ahijevyc/ncl/cd_inv_string.ncl"
 load "/glade/p/work/ahijevyc/ncl/date_str.ncl"
 load "/glade/p/work/ahijevyc/ncl/get_length_scale.ncl"
 load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/p/work/ahijevyc/ncl/CreateTracks.ncl"
+load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
 
 begin
 	; for some reason putting systemfunc("date") in the do loop resulted in random crashes
@@ -19,19 +22,14 @@ begin
 			stride=10
 		end if
 	end if
-	idir = "/glade/scratch/fossell/ADCIRC/"+stormname+"/"+modelstr+"/" 
-	if(stormname.eq."IKE")then
-		idir = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/"+modelstr+"/" 
-		idir = "/glade/scratch/ahijevyc/adcirc/ike/nos_grid/v51_additive_perts/"+modelstr+"/" 
-	end if
+	idir   = "/glade/scratch/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/" 
 	workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
 	; zoom level
 	if(.not.isdefined("zoom")) then
 		zoom = 1
 	end if
-	if(.not.isvar("notide"))then
-		; if notide, modelstr has to be "coldstart_extend" one time - you will get an error but dont worry
-		notide = False
+	if(.not.isvar("minus_astronomical_tide"))then
+		minus_astronomical_tide = False
 	end if
 
 	res = True
@@ -39,7 +37,7 @@ begin
 
 	left_percentile   = 2.5
 	right_percentile = 97.5
-	thresh = 0.5 ; inundation threshold
+	thresh = 1.0 ; inundation threshold
 	thresh_string = sprintf("%4.2fm", thresh)
 
 	f63 = idir+"fort.63.nc"
@@ -47,7 +45,7 @@ begin
 	f = addfile(f63,"r")
 
 	LabelFontHeightF    =   0.0
-	domain_string = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF)
+	domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF)
 
 	k =   ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
 	k := k(::stride)
@@ -59,10 +57,9 @@ begin
 		exit
 	end if
  
-	; cut out needed nodes for smaller file
-	sm_fort63 = workdir+"fort.63."+sprintf("stride%02.0f.",stride)+domain_string
+	; Extract slice of nodes for smaller file
+	sm_fort63 = workdir+"fort.63."+sprintf("stride%02.0f.",stride)+domainString
 	if(.not.isfilepresent(sm_fort63+".nc")) then
-		print(systemfunc("rm -vf "+sm_fort63+".nc") )
 		g = addfile(sm_fort63+".nc","c")
 		; Thin zeta, depth, x, y, and areaCell.
 		printVarSummary(f->zeta)
@@ -70,7 +67,7 @@ begin
 		g->depth = f->depth(k)
 		g->x = f->x(k)
 		g->y = f->y(k)
-		a = addfile("/glade/p/work/ahijevyc/ADCIRC/duda/adcirc_Ike_tri_mesh.nc","r")
+		a = addfile("/glade/p/work/ahijevyc/ADCIRC/duda/NOS_cells.nc","r")
 		g->areaCell = a->areaCell(k)
 
 		; Read file that lists nodes where surface submergence state is 1
@@ -88,79 +85,70 @@ begin
 		print("made "+sm_fort63)
 	end if
 
-	; Model time series interpolated to observation lat/lon
-	g = addfile(idir+"fort.61.nc","r")
-	station_time = g->time
-	station_name = str_strip(tostring(g->station_name))
-	istation = ind(station_name .eq. "8768094")
-	station_lon = g->x(istation)
-	station_lat = g->y(istation)
-	station_lon = -93.3430
-	station_lat =  29.7680
-	station_zeta = g->zeta(:,istation)
-	; model station_time is every 6 minutes (not same as f->time)
-	print("interpolating model station time (every 6 min) to f->time")
-	station_zetas = int2p_Wrap(station_time, station_zeta, f->time, 1)
+    ; Model time series interpolated to observation lat/lon
+    g = addfile(idir+"fort.61.nc","r")
+    station_time = g->time
+    station_name = str_strip(tostring(g->station_name))
+    istation = ind(station_name .eq. "8768094")
+    station_lon = g->x(istation)
+    station_lat = g->y(istation)
+    station_lon = -93.3430
+    station_lat =  29.7680
+    station_zeta = g->zeta(:,istation)
+    ; model station_time is every 6 minutes (not same as f->time)
+    ;print("interpolating model station time (every 6 min) to f->time")
+    ;station_zetas = int2p_Wrap(station_time, station_zeta, f->time, 1)
 
+	; read water height from processed (smaller) file
 	f = addfile(sm_fort63+".nc","r")
-	outfile := workdir+modelstr+".notide"+notide+"_"+thresh_string
+	outfile := workdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string
 	print("opening "+outfile)
 	wks = gsn_open_wks("png",outfile)
-	timeseries_file = outfile + "."+sprintf("stride%02.0f.",stride)+domain_string+".timeseries.nc"
-	zeta := f->zeta
-	if(notide)then ; toggle to plot surge time series with astronomical tide removed.
-		print("subtracting tide")
-		g := addfile(idir+"../coldstart_extend/fort.61.nc","r")
-		station_zeta_tide = g->zeta
-		station_zeta = station_zeta - station_zeta_tide(:,istation)
+	timeseries_file = outfile + "."+sprintf("stride%02.0f.",stride)+domainString+".timeseries.nc"
+	zeta := f->zeta ; read water height from processed (smaller) file
+	if(minus_astronomical_tide)then
+		;print("subtracting astronomical tide from model station time series")
+		;g := addfile(idir+"../coldstart_extend/fort.61.nc","r")
+		;station_zeta_tide = g->zeta
+		;station_zeta = station_zeta - station_zeta_tide(:,istation)
+        ;station_zeta@minus_astronomical_tide = minus_astronomical_tide
 		a = addfile(idir+"../coldstart_extend/fort.63.nc","r")
+        ; Change missing values in astronomical tide run to zeros.
 		zeta_nostorm = where(ismissing(a->zeta),0,a->zeta)
+		print("subtracting astronomical tide from model water level")
+        ; Use "k" subscripts to get small slice of zeta_nostorm that matches size and shape of zeta.
 		zeta = zeta - zeta_nostorm(:,k)
+        zeta@minus_astronomical_tide = minus_astronomical_tide
 		print("subtracted tide")
 	end if
 
-	station_obs_file = "./"+stormname+"/observations/CO-OPS__8768094__wl.csv"
+	station_obs_file = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/observations/CO-OPS__8768094__wl.csv"
+    print("looking for "+station_obs_file)
 	if(fileexists(station_obs_file))then
 		lines := asciiread(station_obs_file, -1, "string")
 		delim = ","
 		DateTimeObs =         str_get_field(lines,1,delim)
 		WaterLevel  = tofloat(str_get_field(lines,2,delim))
 		Quality     =         str_get_field(lines,8,delim)
-		year  = tointeger(str_get_cols(DateTimeObs, 0, 3))
-		month = tointeger(str_get_cols(DateTimeObs, 5, 6))
-		day   = tointeger(str_get_cols(DateTimeObs, 8, 9))
-		hour  = tointeger(str_get_cols(DateTimeObs,11,12))
-		minute= tointeger(str_get_cols(DateTimeObs,14,15))
-		second=minute
-		second=0
-		; There is a bug in cd_inv_calendar. Use ut_inv_calendar.
-		; See https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=4&ved=0CDUQFjADahUKEwjzrKzsy7_IAhUW-2MKHR3FBKE&url=http%3A%2F%2Fmailman.ucar.edu%2Fpipermail%2Fncl-talk%2F2015-July%2F003428.html&usg=AFQjCNHat_z7xtV2q_LT817CbN7e6avfWQ
-		station_obs_time = ut_inv_calendar(year, month, day, hour, minute, second, station_time@units, 0)
+	    station_obs_time = cd_inv_string(DateTimeObs, "%Y-%N-%D %H:%M")
 		print("interpolating observed station water level to f->time")
 		station_obs = int2p_Wrap(station_obs_time, WaterLevel, f->time, 1)
 	end if
 
 	trackfile = idir+"fort.22"
 	print("reading "+trackfile)
-	lines := asciiread(trackfile,-1,"string")
-	delim = ","
-	tracklon = -1 * tofloat(str_get_field(lines, 8, delim))/10.
-	tracklat = tofloat(str_get_field(lines, 7, delim))/10.
-	tt := str_get_field(lines, 3, delim)
-	year   := tointeger(str_get_cols(tt, 1, 4))
-	month  := tointeger(str_get_cols(tt, 5, 6))
-	day    := tointeger(str_get_cols(tt, 7, 8))
-	hour   := tointeger(str_get_cols(tt, 9,10))
-	minute := hour
-	minute = 0
-	second := hour
-	second = 0
-	tracktime = ut_inv_calendar(year, month, day, hour, minute, second, station_time@units, 0)
-	trackheading := tofloat(str_get_field(lines, 26, delim))
+    
+	adeck := read_atcf(trackfile)
+	tracklon = adeck@lon
+	tracklat = adeck@lat
+    adeck_valid = adeck@valid   
+    adeck_valid@units = adeck@timeunits
+	tracktime = cd_convert(adeck_valid, f->time@units)
+	trackheading := adeck@heading
 	trackI := sin(trackheading/180*3.141592)
 	trackJ := cos(trackheading/180*3.141592)
-	vmax   := tofloat(str_get_field(lines, 9, delim))
-	rad    := tofloat(str_get_field(lines, 12, delim))
+	vmax   := adeck@vmax
+	rad    := adeck@rad
 
 	ntime = dimsizes(zeta&time)
 	depth = f->depth
@@ -213,7 +201,7 @@ begin
 	sres                        = True
 	sres@gsnFrame               = False
 	sres@gsnDraw                = False
-	sres@tiMainString           = modelstr + " run,  notide=" + notide
+	sres@tiMainString           = modelstr + " run,  minus_astronomical_tide=" + minus_astronomical_tide
 	sres@xyLineColor            = "black"
 	sres@tiYAxisFontHeightF     =  0.013
 	sres@xyLineThicknessF       =  3.
@@ -248,78 +236,104 @@ begin
 	end if
 	c := addfile(control_timeseries_file,"r")
 
+	; If timeseries file doesn't exist, create it and initialize variables. Otherwise preserve them.
 	if(isfilepresent(timeseries_file))then
 		g = addfile(timeseries_file,"w")
-	else
+        inundation_volume = g->inundation_volume
+        inundation_true = g->inundation_true
+        length_scale    = g->length_scale; read previously written array
+        volume_in_ctrl  = g->volume_in_ctrl ; 
+        average_depth   = g->average_depth
+        inundation_area = g->inundation_area
+    else
 		g = addfile(timeseries_file,"c")
-	end if
-	; If inundation_volume variable is missing, initialize it. Otherwise preserve it.
-	if(.not.isfilevar(g,"inundation_volume"))then
+        ; Put res variable in global attributes so we have lat/lon min/max
+        globalAtts = True
+        globalAtts@domain = domainString
+        globalAtts@minus_astronomical_tide =  minus_astronomical_tide
+        globalAtts@stride = stride
+        globalAtts@zoom = zoom
+        fileattdef(g, globalAtts)
 		inundation_volume = new(ntime,double,-999.); need short number for titles (default is minus 1 zillion billion)
 		inundation_volume@long_name = "inundation volume in surge zone"
 		inundation_volume@units = "km~S~3~N~"
-		inundation_volume@depth_threshold = thresh
-		inundation_volume@depth_threshold_units = "m"
+		inundation_volume@depth_threshold = thresh_string
+		inundation_volume@left_percentile = left_percentile
+		inundation_volume@right_percentile = right_percentile
 		inundation_volume!0 = "time"
 		inundation_volume&time = zeta&time
 		g->inundation_volume = inundation_volume
-	end if
-	inundation_volume = g->inundation_volume
-	; If any of these fields don't exist, re-initialize them all. Otherwise preserve them.
-	if(any(.not.isfilevar(g, (/"volume_in_ctrl","length_scale","inundation_true","average_depth","inundation_area"/) )))then
-		volume_in_ctrl = new(dimsizes(inundation_volume),typeof(inundation_volume))
-		copy_VarMeta(inundation_volume,volume_in_ctrl)
-		length_scale = volume_in_ctrl
-		copy_VarMeta(inundation_volume,length_scale)
-		length_scale@long_name = "length_scale of surge zone"
-		length_scale@units = "km"
-		length_scale@left_percentile = left_percentile
-		length_scale@right_percentile = right_percentile
-		average_depth = length_scale
-		copy_VarMeta(length_scale, average_depth)
+
+		average_depth = new(dimsizes(inundation_volume),typeof(inundation_volume))
+		copy_VarMeta(inundation_volume, average_depth)
 		average_depth@long_name = "average depth in surge zone"
 		average_depth@units = "m"
-		inundation_area = length_scale
-		copy_VarMeta(length_scale,inundation_area)
+		g->average_depth=average_depth
+
+		inundation_area = new(dimsizes(inundation_volume),typeof(inundation_volume))
+		copy_VarMeta(inundation_volume, inundation_area)
 		inundation_area@long_name = "area of surge zone"
 		inundation_area@units = "km~S~2~N~"
+		g->inundation_area=inundation_area
+
 		inundation_true = new((/ntime,nnodes/),byte)
+		copy_VarAtts(inundation_volume, inundation_true)
 		inundation_true@long_name = "1b=inundated"
 		inundation_true!0="time"
 		inundation_true&time = zeta&time
 		inundation_true!1="node"
 		g->inundation_true = inundation_true
+
+		length_scale = new(dimsizes(inundation_volume),typeof(inundation_volume))
+		copy_VarMeta(inundation_volume, length_scale)
+		length_scale@long_name = "length_scale of surge zone"
+		length_scale@units = "km"
 		g->length_scale = length_scale
+
+        volume_in_ctrl = new(dimsizes(inundation_volume),typeof(inundation_volume))
+		copy_VarMeta(inundation_volume, volume_in_ctrl)
+        volume_in_ctrl@long_name = "inundation volume in control surge zone"
 		g->volume_in_ctrl=volume_in_ctrl
-		g->average_depth=average_depth
-		g->inundation_area=inundation_area
+
 	end if
-	inundation_true = g->inundation_true
-	length_scale    = g->length_scale; yes..  it is important to have x=g->x after g->x=g for some reason
-	volume_in_ctrl  = g->volume_in_ctrl ; yes..  it is important to have x=g->x after g->x=g (in loop above)
-	average_depth   = g->average_depth
-	inundation_area = g->inundation_area
+
 	tmp := dimsizes(inundation_true)
 	if(tmp(1).ne.nnodes)then
 		printVarSummary(inundation_true)
 		print(nnodes)
-		print("do you need to delete "+timeseries_file+" and run again with stride="+tostring(stride)+"?")
+		print("Number of nodes doesn't match")
+        print("Remove "+timeseries_file+" and rerun with stride="+tostring(stride)+"?")
 		exit
 	end if
-	g->inundation_volume = inundation_volume
-	g->inundation_true = inundation_true
-	g->length_scale = length_scale
-	g->volume_in_ctrl = volume_in_ctrl
-	g->average_depth = average_depth
 
 	; meta data for sanity check
 	txres = True
 	txres@txFontHeightF = 0.01
 	txres@txJust  = "BottomLeft"
 
-; uncommment to just plot the time with maximum bulge volume
-; assumes time series is complete already
+    ; Dot nodes 
+    ssres                  = True
+    ssres@gsMarkerColor    = "pink"
+    ssres@gsMarkerIndex    = 1
+    ssres@gsMarkerSizeF    = 0.005
+    ssres@gsMarkerOpacityF = 0.5
 
+    ; Draw LS contours (left and right sides)
+    LSres = True
+    LSres@gsnDraw = False
+    LSres@gsnFrame = False
+    LSres@cnLevelSelectionMode = "ExplicitLevels"
+    LSres@cnExplicitLineLabelsOn = True
+    LSres@cnLineLabelBackgroundColor = -1
+    LSres@cnLineLabelInterval = 1
+    LSres@sfFirstNodeIndex = res@sfFirstNodeIndex
+    LSres@sfXArray = res@sfXArray
+    LSres@sfYArray = res@sfYArray
+    LSres@cnInfoLabelString = "length scale $CMN$ to $CMX$ km"
+    ;LSres@cnLevelSelectionMode = "AutomaticLevels" ; plot a bunch of contours
+
+    ; define itime to just plot the time with maximum bulge volume
+    ; assumes time series is complete already
 	itime = maxind(inundation_volume)
 	if(ismissing(itime))then
 		itime=235
@@ -352,7 +366,8 @@ begin
 		trackJ0   = (1 - frac) * trackJ(tracki-1)   + frac * trackJ(tracki) + tracklat0
 		trackI0   = (1 - frac) * trackI(tracki-1)   + frac * trackI(tracki) + tracklon0
 		ring_km = 800.
-		dist := gc_latlon(res@sfYArray,res@sfXArray,conform(res@sfYArray,tracklat0,-1),conform(res@sfXArray,tracklon0,-1),2,-4) ; accurate calculation (great-circle distance)
+        ; accurate calculation (great-circle distance)
+		dist := gc_latlon(res@sfYArray,res@sfXArray,conform(res@sfYArray,tracklat0,-1),conform(res@sfXArray,tracklon0,-1),2,-4)
 		if(min(dist).gt.ring_km)then
 			print("storm outside domain. skipping.")
 			continue
@@ -363,21 +378,17 @@ begin
 		dist_right = dist * -sin(LorR/180.*3.141592)
 		zeta1 := zeta(itime,:)
 
-		; Dot nodes 
-		ssres                  = True
-		ssres@gsMarkerColor    = "pink"
-		ssres@gsMarkerIndex    = 1
-		ssres@gsMarkerSizeF    = 0.005
-		ssres@gsMarkerOpacityF = 0.5
-
 		; inundation is water height above MSL minus surface height above MSL (depth is negative for positive height above MSL)
 		inundation = zeta1 + depth
 		copy_VarMeta(zeta1, inundation)
-		inundation@long_name = "water depth over land"
+		inundation@long_name = "depth of water over normally dry land"
 		; Isolate start dry land. Mask ocean, but not low-lying land nodes below mean sea level.
 		; sfc_sub_state is missing or 1. 1 is land that starts dry but depth>0 (is below MSL). 
-		inundation = mask(inundation, depth.le.0 .or. sfc_sub_state.eq.1, True)
-		res@sfDataArray = inundation
+		inundation         = mask(inundation, depth.le.0 .or. sfc_sub_state.eq.1, True)
+		res@sfDataArray    = inundation
+	    res@lbTitleFontHeightF = 0.01
+	    res@lbTitlePosition = "Bottom"
+	    res@lbTitleString  = inundation@units
 		map := gsn_csm_contour_map(wks,inundation,res)
 
 		; Tried to use gsn_polymarker procedure but dots would be overlaid by filled contours.
@@ -387,8 +398,8 @@ begin
 		; This affects length scale, average depth, total inundation volume, inundation area...
 		printMinMax(inundation,False)
 		volume = where(.not.ismissing(inundation).and.inundation.ge.thresh,volume,0.) 
-		;tmp := maxind(volume)
-		;print("max inundation node in domain: areaCell="+tostring(areaCell(tmp))+"sq km, inundation="+tostring(inundation(tmp))+"m, "+tostring(res@sfXArray(tmp))+"E "+tostring(res@sfYArray(tmp))+"N")
+		tmp := maxind(volume)
+		print("max inundation node in domain: areaCell="+tostring(areaCell(tmp))+"sq km, inundation="+tostring(inundation(tmp))+"m, "+tostring(res@sfXArray(tmp))+"E "+tostring(res@sfYArray(tmp))+"N")
 		if(sum(volume).eq.0)then
 			print("no inundation above threshold. skipping time.")
 			continue
@@ -397,23 +408,13 @@ begin
 		right_length_km = get_length_scale(volume,dist_right, right_percentile/100.)
 		g->length_scale(itime) = right_length_km - left_length_km
 		; Draw LS contours (left and right sides)
-		LSres = True
-		LSres@gsnDraw = False
-		LSres@gsnFrame = False
 		LSres@cnLevels = (/ left_length_km, right_length_km /)
-		LSres@cnLevelSelectionMode = "ExplicitLevels"
-		LSres@cnExplicitLineLabelsOn = True
-		LSres@cnLineLabelBackgroundColor = -1
 		LSres@cnLineLabelStrings = (/ "Left: "+sprintf("%.0fkm",left_length_km), "Right: "+sprintf("%.0fkm",right_length_km) /)
-		LSres@cnLineLabelInterval = 1
-		LSres@sfFirstNodeIndex = res@sfFirstNodeIndex
-		LSres@sfXArray = res@sfXArray
-		LSres@sfYArray = res@sfYArray
-		LSres@cnInfoLabelString = "length scale $CMN$ to $CMX$ km"
-		;LSres@cnLevelSelectionMode = "AutomaticLevels" ; plot a bunch of contours
 		LS := gsn_csm_contour(wks, dist_right, LSres)
 		overlay(map, LS)
-		; used to be .and.inundation.ge.0, but we don't want dry land nodes
+        print("overlaid length scale")
+
+		; .gt.0. used to be .ge.0, but we don't want dry land nodes
 		bi := ind(dist_right.ge.left_length_km.and.dist_right.le.right_length_km.and.volume.gt.0.)
 		if(.not.any(ismissing(bi)))then
 			inundation_volume(itime) = sum(volume(bi))
@@ -449,6 +450,7 @@ begin
 		title := sprintf("~C~surge zone defined by %.0f",right_percentile-left_percentile)+"% of volume (" +sprintf("%.1f",left_percentile)+"% to the left and "+sprintf("%.1f",100.-right_percentile)+"% to the right) where depth >= "+thresh_string+"~C~surge zone volume " + sprintf(":%6.2f", inundation_volume(itime)) + inundation_volume@units + " / length:" + sprintf("%4.0fkm",right_length_km-left_length_km) + " average depth: " + sprintf("%.1fm",g->average_depth(itime)) + " / area: "+ sprintf("%.0f km~S~2~N~",g->inundation_area(itime)) + "~C~surge zone volume intersecting surge zone of control run (pink): " + sprintf("%6.2fkm~S~3~N~",volume_in_ctrl(itime))
 		gsn_text_ndc(wks,title, 0.204, 0.6, txres)
 		storm_track := gsn_add_polyline(wks,map,tracklon,tracklat,lres)
+        print("added storm track")
 
 		
 		fracts := (/ 0.99, 0.95, 0.9, 0.8, 0.7, 0.5 /)
@@ -471,6 +473,7 @@ begin
 		storm_center_vmax := gsn_add_text(wks,map,sprintf("%.0fkt",vmax0),tracklon0,tracklat0,vmax_res)
 
 		draw(map)
+        print("draw(map) completed")
 		; Dot at station of interest
 		sres@xyLineColor          = "dark green"
 		y1 := inundation_volume
