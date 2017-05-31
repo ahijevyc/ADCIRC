@@ -33,6 +33,7 @@ begin
 	end if
 
 	res = True
+    ; Assign domain min/max lat/lon attributes to res.
 	res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
 
 	left_percentile   = 2.5
@@ -45,7 +46,8 @@ begin
 	f = addfile(f63,"r")
 
 	LabelFontHeightF    =   0.0
-	domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF)
+	domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
+                   sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF)
 
 	k =   ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
 	k := k(::stride)
@@ -70,16 +72,20 @@ begin
 		a = addfile("/glade/p/work/ahijevyc/ADCIRC/duda/NOS_cells.nc","r")
 		g->areaCell = a->areaCell(k)
 
-		; Read file that lists nodes where surface submergence state is 1
+		; Read file that lists nodes where surface submergence state is 1, or "start dry nodes". 
+        ; They are actually contained in the fort.13 file, but that file has other attributes,
+        ; so it's hard to parse.  So Kate pulled that chunk of data out to this text file.  
+        ; The file lists the node number, which must be cross referenced with index of lat/lon vars or fort.14 file. 
 		sfc_sub_state_file = "/glade/p/work/ahijevyc/ADCIRC/surface_submergence_state_14040.txt"
 		lines = asciiread(sfc_sub_state_file, -1, "integer")
-		; asciiread() reads into a 1-D array. the file is 2 columns, so read every other one, starting with element zero 
-		; to get the first column. These are the inodes. 
+		; asciiread() reads into a 1-D array. the file is 2 columns, so read every other one,
+        ; starting with element zero to get the first column. These are the inodes. 
 		inodes = lines(::2)
 		; Create a new variable to hold the surface submergence state.
 		sfc_sub_state = new(dimsizes(f->depth), "integer")
 		; Set appropriate inodes to 1
-		; The sfc_sub_state_file lists node indices where indices are 1-based.  But ncl is zero-based.  So subtract one from the node indices.
+		; The sfc_sub_state_file lists node indices in Fortran style, where indices are 1-based. 
+        ; But ncl is zero-based. So subtract one from the node indices for NCL.
 		sfc_sub_state(inodes-1) = 1
 		g->sfc_sub_state = sfc_sub_state(k)
 		print("made "+sm_fort63)
@@ -399,7 +405,8 @@ begin
 		printMinMax(inundation,False)
 		volume = where(.not.ismissing(inundation).and.inundation.ge.thresh,volume,0.) 
 		tmp := maxind(volume)
-		print("max inundation node in domain: areaCell="+tostring(areaCell(tmp))+"sq km, inundation="+tostring(inundation(tmp))+"m, "+tostring(res@sfXArray(tmp))+"E "+tostring(res@sfYArray(tmp))+"N")
+		print("max inundation node in domain: areaCell="+tostring(areaCell(tmp))+"sq km, inundation="+\
+            tostring(inundation(tmp))+"m, "+tostring(res@sfXArray(tmp))+"E "+tostring(res@sfYArray(tmp))+"N")
 		if(sum(volume).eq.0)then
 			print("no inundation above threshold. skipping time.")
 			continue
@@ -477,7 +484,7 @@ begin
 		; Dot at station of interest
 		sres@xyLineColor          = "dark green"
 		y1 := inundation_volume
-		sres@xyExplicitLabels     = "inun da tion"
+		sres@xyExplicitLabels     = "inun da tion" ; spaces allow label to bend around tight curves
 		delete(map)
 		; check for 2 unique values. avoid error about zero width y axis
 		if (count_unique_values(y1).ge.2)then
@@ -496,10 +503,3 @@ begin
 	end do
 	
 end
-; multi-panel movie
-;foreach f (`seq -f '%06.0f' 1 347`)
-;foreach? montage -trim -geometry 80% control.tide.$f.png control.bulge.$f.png NOS.tide.$f.png NOS.bulge.$f.png $f.png
-;foreach? end
-;convert -adjoin ??????.png -loop 0 -delay 80 t.gif
-
-
