@@ -1,6 +1,3 @@
-load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_code.ncl"
-load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_csm.ncl"
-load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/contributed.ncl"
 load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
 
 ; copied from simple_plot.ncl on Jan 25, 2016
@@ -14,7 +11,6 @@ begin
 	if(.not.isvar("stormname"))then
 		stormname = "IKE"
 	end if
-	basedir = "/glade/scratch/fossell/ADCIRC/"
 	basedir = "/glade/scratch/ahijevyc/adcirc/"
 	modeldir = basedir + stormname+"/"+modelstr+"/" 
 	obsdir   = basedir + stormname+"/control/" 
@@ -27,6 +23,11 @@ begin
 	if(.not.isdefined("zoom")) then
 		zoom = 1
 	end if
+
+    outdir = /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
+	outfile = outdir+modelstr+".perfectmodel.zoom"+zoom
+
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	res = True
 	res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
@@ -82,7 +83,6 @@ begin
 		g->inundation = inundation
 	end do
 
-	outfile = workdir+modelstr+".perfectmodel.zoom"+zoom
 	if(isfilepresent(outfile+".nc"))then
 		system("rm -v "+outfile+".nc")
 	end if

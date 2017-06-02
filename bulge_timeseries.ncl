@@ -8,13 +8,11 @@ load "/glade/p/work/ahijevyc/ncl/CreateTracks.ncl"
 load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
 
 begin
-	; for some reason putting systemfunc("date") in the do loop resulted in random crashes
-	currentdate = systemfunc("date")
 	if(.not.isvar("modelstr"))then
 		modelstr = "control"
 	end if
 	if(.not.isvar("stormname"))then
-		stormname = "MATTHEW"
+		stormname = "IKE"
 	end if
 	if(.not.isvar("stride"))then
 		stride=2
@@ -31,6 +29,14 @@ begin
 	if(.not.isvar("minus_astronomical_tide"))then
 		minus_astronomical_tide = False
 	end if
+
+	outdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
+	outfile := outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string
+
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	; for some reason putting systemfunc("date") in the do loop resulted in random crashes
+	currentdate = systemfunc("date")
 
 	res = True
     ; Assign domain min/max lat/lon attributes to res.
@@ -107,7 +113,6 @@ begin
 
 	; read water height from processed (smaller) file
 	f = addfile(sm_fort63+".nc","r")
-	outfile := workdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string
 	print("opening "+outfile)
 	wks = gsn_open_wks("png",outfile)
 	timeseries_file = outfile + "."+sprintf("stride%02.0f.",stride)+domainString+".timeseries.nc"
