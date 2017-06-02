@@ -1,23 +1,30 @@
-load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_code.ncl"
-load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_csm.ncl"
-load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/contributed.ncl"
 load "/glade/p/work/ahijevyc/ncl/get_length_scale.ncl"
 load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
+load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
 
 begin
-	; for some reason putting systemfunc("date") in the do loop resulted in random crashes
-	currentdate = systemfunc("date")
+
 	if(.not.isvar("modelstr"))then
-		modelstr = "control_nws20"
+		modelstr = "control"
 	end if
 	if(.not.isvar("stormname"))then
-		stormname = "MATTHEW"
+		stormname = "IKE"
 	end if
 	workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
 	; zoom level
 	if(.not.isdefined("zoom")) then
 		zoom = 1
 	end if
+
+	outfile = workdir+modelstr+".zoom"+zoom
+
+
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+
+	; for some reason putting systemfunc("date") in the do loop resulted in random crashes
+	currentdate = systemfunc("date")
 
 	res = True
 	res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
@@ -56,7 +63,7 @@ begin
 	end if
 	; Only retain land values and low-lying land nodes below MSL (sfc_sub_state=1, or "startDry" nodes). 
 	inundation = mask(inundation, (g->depth).le.0 .or. (g->sfc_sub_state.eq.1), True)
-	inundation@long_name = "maximum inundation (all times)"
+	inundation@long_name = "maximum inundation at any time"
 	inundation@units     = "m"
 	g->inundation = inundation
 
@@ -65,11 +72,7 @@ begin
 	obs_file = "./observations/Ike_2008_surge_station_obs.csv"
 	obs_file = "./"+stormname+"/observations/"+stormname+"_SURGEDAT.csv"
 	; ike_SSS_high_water.csv created by get_USGS_high_water.csh from pubs.usgs.gov/of/2008/1365/downloads
-	obs_file = "./"+stormname+"/observations/"+stormname+"_SSS_high_water.csv"
-	outfile = workdir+modelstr+".zoom"+zoom
-	if(isStrSubset(obs_file,"_SSS_"))then
-		outfile = workdir+modelstr+".USGS.zoom"+zoom
-	end if
+	obs_file = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/observations/"+stormname+"_SSS_high_water.csv"
 	if(isfilepresent(outfile+".nc"))then
 		system("rm -v "+outfile+".nc")
 	end if
@@ -77,25 +80,11 @@ begin
 	
 	wks = gsn_open_wks("png",outfile)
 	trackfile = workdir+"fort.22"
-	; fort.22 is quite different for the NOS run. it don't have lat/lon of track.
-	if(fileexists(trackfile).and.modelstr.ne."NOS_OWI")then
-		print("reading "+trackfile)
-		lines := asciiread(trackfile,-1,"string")
-		delim = ","
-		tracklon = -1 * tofloat(str_get_field(lines, 8, delim))/10.
-		tracklat = tofloat(str_get_field(lines, 7, delim))/10.
-		tt := str_get_field(lines, 3, delim)
-		year   := tointeger(str_get_cols(tt, 1, 4))
-		month  := tointeger(str_get_cols(tt, 5, 6))
-		day    := tointeger(str_get_cols(tt, 7, 8))
-		hour   := tointeger(str_get_cols(tt, 9,10))
-		minute := hour
-		minute = 0
-		second := hour
-		second = 0
-	end if
+	; fort.22 is quite different for the NOS_OWI run. it don't have lat/lon of track.
 
-
+	adeck := read_atcf(trackfile)
+	tracklon = adeck@lon
+	tracklat = adeck@lat
 
 	f = addfile(sm+".nc","r")
 	nnodes = dimsizes(f->zeta_max) ; number of nodes
@@ -131,6 +120,8 @@ begin
 
 	res@gsnCenterString          = modelstr
 	res@gsnCenterStringOrthogonalPosF = 0.1
+	res@gsnLeftString            = ""
+	res@gsnRightString           = ""
 
 	; Don't advance the frame.
 	res@gsnFrame = False
@@ -203,7 +194,7 @@ begin
 	end if
 	print(confidence)
 	obsres = True
-	obsres@gsMarkerIndex = 4
+	obsres@gsMarkerIndex = 16
 	obsres@gsMarkerColor = "dark green"
 	obsres@gsMarkerSizeF = 0.004
 	obsres@gsMarkerThicknessF = 2.
@@ -215,6 +206,8 @@ begin
 	end if
 	
 	dist_errs = new(dimsizes(lines),"double")
+    dist_errs@long_name = "distance from observation to closest node"
+    dist_errs@units = "m"
 	obs       = new(dimsizes(lines),"double")
 	model     = new(dimsizes(lines),"double")
 	; for each surge station observation
@@ -239,7 +232,7 @@ begin
 			print(sprintf("%7.2fE",x(n))+sprintf("%6.2fN",y(n))+sprintf("%4.0fm",1000*dist(i))+" zeta_max="+sprintf("%6.2fm",zeta_max(i)) + " n="+sprintf("%4.0f",n)+" obs="+sprintf("%5.1fm",obs(n))+" model="+sprintf("%4.1fm",model(n))+" closest node too far")
 			continue
 		end if
-		dist_errs(n) = dist(i)
+		dist_errs(n) = 1000*dist(i)
 		model(n) = zeta_max(i)
 		; if zeta_max is missing don't ignore the point--assign sfc elevation. treat it as zero inundation.
 		; This is a problem for points along small rivers not resolved in ADCIRC mesh.
@@ -269,7 +262,7 @@ begin
 			gsn_text(wks,map," "+sprintf("%5.2f",obs(n)),x(n),y(n),obsres)
 		end if
 	end do
-	print("maximum distance from observation: "+sprintf("%3.1fkm",max(dist_errs)))
+	print("maximum distance from observation: "+sprintf("%5.0fm",max(dist_errs)))
 
 	printMinMax(obs,False)
 	printVarSummary(model)
@@ -297,49 +290,41 @@ begin
 	end if
 	rmse = sqrt(avg((obs-model)^2))
 	si = stddev(obs-model)/avg(obs)
-	data = new ( (/3, dimsizes(obs)/), typeof(model))
-	data(0,:) = model
-	data(1,:) = rc*obs + rc@yintercept
-	data(2,:) = (/ obs /); 1:1 line (obs vs obs)
 	out2->obs = obs
 	out2->model = model
 	out2->rc = rc
 	out2->rc_tmp = rc_tmp
 
 	xyres                 = True                   ; plot mods desired
+    xyres@gsnDraw         = False
+    xyres@gsnFrame        = False
 	; this controls the size and location of the first plot
-	xyres@vpXF            = 0.75
+	xyres@vpXF            = 0.7
 	xyres@vpWidthF        = 0.20	    
 	xyres@vpYF            = 0.96
 	xyres@vpHeightF       = 0.20 
 
 	xyres@gsnMaximize         = False                  ; maximize plot in frame
-	xyres@xyMarkLineModes     = (/"Markers","Lines","Lines"/)  ; choose which have markers
+	xyres@xyMarkLineModes     = (/"Markers"/)  ; choose which have markers
 	xyres@xyMarker            = obsres@gsMarkerIndex               ; choose type of marker 
 	xyres@xyMarkerColor       = "dark green"                ; Marker color
 	xyres@xyMarkerSizeF       = obsres@gsMarkerSizeF         ; Marker size (default 0.01)
 	xyres@xyMarkerThicknesses   = (/obsres@gsMarkerThicknessF,1,1/) 
-	xyres@xyDashPatterns      = (/"Solid","Solid","Solid"/)                
+	xyres@xyDashPatterns      = (/"Solid"/)                
 	xyres@xyLineThicknesses   = (/1,1,2/) 
-	xyres@xyLineColors        = (/xyres@xyMarkerColor,xyres@xyMarkerColor,"black"/)
+	xyres@xyLineColors        = (/xyres@xyMarkerColor/)
 	xyres@xyLabelMode         = "Custom"
 	xyres@gsnShape            = True
 	xyres@trYMinF             = 0.
 	xyres@trXMinF             = 0.
+	xyres@trYMaxF             = 8.
+	xyres@trXMaxF             = 8.
 
 	xyres@tiMainString        = "n="+sprintf("%.0f",rc@nptxy)+", r~S~2~N~="+sprintf("%4.2f",r2)+", multiplic. bias="+sprintf("%4.2f",rc@yave/rc@xave)+"~C~scatter index="+sprintf("%4.2f",si) + ", RMSE="+sprintf("%4.2fm",rmse)
 	xyres@tiYAxisString       = modelstr + "~C~" + zeta_max@long_name + "~C~(meters)"
 	xyres@tiXAxisString       = obs_file + "~C~(meters)"
 	
-	plot  = gsn_csm_xy (wks,obs,data,xyres)        ; create plot
-
-	; 2nd page - full page scatterplot
-	; This scatterplot is done differently than first page. Perhaps change first page to be the same as this one.
-	; 1st page scatterplot is an example of multiple y-series sharing the same x-series.
-	xyres@gsnMaximize          = True               ; maximize plot in frame
-	xyres@gsnDraw = False
-	xyres@gsnFrame = False
-	plot  = gsn_csm_xy (wks,obs,model,xyres)        ; create plot
+	plot  = gsn_csm_xy (wks,obs,model,xyres)    ; create scatterplot
 	getvalues plot
 		"trXMaxF" : xmax
 	end getvalues
@@ -351,15 +336,15 @@ begin
 	delete(xyres@xyMarkerThicknesses)
 	delete(xyres@xyLineThicknesses)
 	delete(xyres@xyMarkLineModes)
-	print(xyres)
 	best_fit = gsn_csm_xy(wks, xrange, rc*xrange + rc@yintercept,xyres) 
-	xyres@xyExplicitLabels = "1:1"
+	xyres@xyExplicitLabels   = "1:1"
 	xyres@xyLineColor        = "black"
 	one2one  = gsn_csm_xy(wks, xrange, xrange, xyres)
 	overlay(plot,best_fit)
 	overlay(plot,one2one)
 	draw(plot)
-	frame(wks) 
+    frame(wks)
+
 
 	; IKE landfall coordinates and heading in control run.
 	;clat = 29.3
@@ -383,7 +368,8 @@ begin
 	;end if
 
 	res@sfDataArray      = inundation
-	title = "inundation swath volume in domain = "+sprintf("%.1f", sum(volumes))+" km~S~3~N~"
+	res@lbTitleString    = inundation@long_name + " " + inundation@units
+	title = "inundation swath volume = "+sprintf("%.1f", sum(volumes))+" km~S~3~N~"
 	; title = title + "~C~in control inundation swath (pink) = "+sprintf("%.1f", in_control_zone) + " km~S~3~N~"
 	map := gsn_csm_contour_map(wks,inundation,res)
 	if(zoom.ge.3) then
@@ -420,17 +406,20 @@ begin
 	if(isdefined("tracklon"))then		
 		gsn_polyline(wks,map,tracklon,tracklat,lres)
 	end if
-	gsn_text_ndc(wks, "domain "+tostring(zoom)+"~C~"+systemfunc("date"),0.01,0.01,txres)
-	txres@txJust        = "TopLeft"
-	gsn_text_ndc(wks, title,0.01,0.99,txres)
-	frame(wks)
+	gsn_text_ndc(wks, "domain "+tostring(zoom)+" "+title+"~C~"+systemfunc("date"),0.01,0.01,txres)
 
 	hres                          = True
+	hres@vpXF            = 0.07
+	hres@vpWidthF        = 0.20	    
+	hres@vpYF            = 0.98
+	hres@vpHeightF       = 0.20
 	hres@gsnHistogramBinIntervals = cnLevels
 	hres@gsnHistogramMinMaxBinsOn = True
+	hres@trYMaxF         = 1.1*num(inundation.ge.0.5.and.inundation.lt.1)
 	hres@tiMainString             = res@gsnCenterString
 	hres@gsFillColor              = cnFillColors
 	plot := gsn_histogram(wks,inundation,hres)
+
 
 	print("finished "+outfile)
 	
