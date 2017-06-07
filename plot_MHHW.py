@@ -37,14 +37,15 @@ else:
     latv = ncf.createVariable("lat", "f4", ("node",))
     xv = ncf.createVariable("x", "f4", ("node",))
     yv = ncf.createVariable("y", "f4", ("node",))
-    mhhwv = ncf.createVariable("mhhw", "f4", ("node",))
-    lmslv = ncf.createVariable("lmsl", "f4", ("node",),fill_value=msg)
+    mhhwv = ncf.createVariable("mhhw", "f4", ("node",),fill_value=msg)
+    lmslv = ncf.createVariable("lmsl", "f4", ("node",))
     lonv[:] = lon
     latv[:] = lat
     xv[:] = x 
     yv[:] = y 
     mhhwv[:] = mhhw 
     lmslv[:] = lmsl
+    print np.min(lmsl)
     ncf.close()
 m = Basemap(llcrnrlon=-98.,llcrnrlat=25.,urcrnrlon=-80.5,urcrnrlat=31.7, projection='merc', resolution ='h')
 
