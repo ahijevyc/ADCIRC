@@ -38,7 +38,7 @@ begin
         dryland= "MHHW" ; or "LMSL" 
     end if
     ; Sanity check for misspelled dryland
-    if(.not.any(dryland.eq.(/"MHHW","LMSL"/))then
+    if(.not.any(dryland.eq.(/"MHHW","LMSL"/)))then
         print("Unexpected dryland: "+dryland)
         exit
     end if
