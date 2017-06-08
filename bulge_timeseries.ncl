@@ -8,6 +8,7 @@ load "/glade/p/work/ahijevyc/ncl/CreateTracks.ncl"
 load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
 
 begin
+
     if(.not.isvar("modelstr"))then
         modelstr = "control"
     end if
@@ -44,12 +45,13 @@ begin
     end if
 
     outdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
-    outfile := outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland
+    outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland
 
-    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-    ; for some reason putting systemfunc("date") in the do loop resulted in random crashes
-    currentdate = systemfunc("date")
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+
 
     res = True
     ; Assign domain min/max lat/lon attributes to res.
@@ -66,7 +68,7 @@ begin
     domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
                    sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF)
 
-    k =   ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
+    k = ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
     k := k(::stride)
     if(any(ismissing(k)))then
         print("no nodes in zoom domain?")
@@ -77,9 +79,9 @@ begin
     end if
  
     ; Extract slice of nodes for smaller file
-    sm_fort63 = workdir+"fort.63."+sprintf("stride%02.0f.",stride)+domainString
-    if(.not.isfilepresent(sm_fort63+".nc")) then
-        g = addfile(sm_fort63+".nc","c")
+    model_file = workdir+"fort.63."+sprintf("stride%02.0f.",stride)+domainString
+    if(.not.isfilepresent(model_file+".nc")) then
+        g = addfile(model_file+".nc","c")
         ; Thin zeta, depth, x, y, and areaCell.
         printVarSummary(f->zeta)
         g->zeta = f->zeta(:,k)
@@ -112,36 +114,17 @@ begin
         hgt_MHHW = MHHW_fh->mhhw
         printVarSummary(hgt_MHHW)
         g->hgt_MHHW = hgt_MHHW(k)
-        print("made "+sm_fort63)
+        print("made "+model_file)
     end if
 
-    ; Model time series interpolated to observation lat/lon
-    g = addfile(idir+"fort.61.nc","r")
-    station_time = g->time
-    station_name = str_strip(tostring(g->station_name))
-    istation = ind(station_name .eq. "8768094")
-    station_lon = g->x(istation)
-    station_lat = g->y(istation)
-    station_lon = -93.3430
-    station_lat =  29.7680
-    station_zeta = g->zeta(:,istation)
-    ; model station_time is every 6 minutes (not same as f->time)
-    ;print("interpolating model station time (every 6 min) to f->time")
-    ;station_zetas = int2p_Wrap(station_time, station_zeta, f->time, 1)
-
     ; read water height from processed (smaller) file
-    print("reading smaller processed file "+sm_fort63+".nc")
-    f = addfile(sm_fort63+".nc","r")
+    print("reading smaller processed file "+model_file+".nc")
+    f = addfile(model_file+".nc","r")
     print("png file will be "+outfile)
     wks = gsn_open_wks("png",outfile)
     timeseries_file = outfile + "."+sprintf("stride%02.0f.",stride)+domainString+".timeseries.nc"
     zeta := f->zeta ; read water height from processed (smaller) file
     if(minus_astronomical_tide)then
-        ;print("subtracting astronomical tide from model station time series")
-        ;g := addfile(idir+"../coldstart_extend/fort.61.nc","r")
-        ;station_zeta_tide = g->zeta
-        ;station_zeta = station_zeta - station_zeta_tide(:,istation)
-        ;station_zeta@minus_astronomical_tide = minus_astronomical_tide
         a = addfile(idir+"../coldstart_extend/fort.63.nc","r")
         ; Change missing values in astronomical tide run to zeros.
         zeta_nostorm = where(ismissing(a->zeta),0,a->zeta)
@@ -152,22 +135,9 @@ begin
         print("subtracted tide")
     end if
 
-    station_obs_file = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/observations/CO-OPS__8768094__wl.csv"
-    print("looking for "+station_obs_file)
-    if(fileexists(station_obs_file))then
-        lines := asciiread(station_obs_file, -1, "string")
-        delim = ","
-        DateTimeObs =         str_get_field(lines,1,delim)
-        WaterLevel  = tofloat(str_get_field(lines,2,delim))
-        Quality     =         str_get_field(lines,8,delim)
-        station_obs_time = cd_inv_string(DateTimeObs, "%Y-%N-%D %H:%M")
-        print("interpolating observed station water level to f->time")
-        station_obs = int2p_Wrap(station_obs_time, WaterLevel, f->time, 1)
-    end if
-
     trackfile = idir+"fort.22"
+    ; fort.22 is quite different for the NOS_OWI run. it don't have lat/lon of track.
     print("reading "+trackfile)
-    
     adeck := read_atcf(trackfile)
     tracklon = adeck@lon
     tracklat = adeck@lat
@@ -502,7 +472,7 @@ begin
         storm_track := gsn_add_polyline(wks,map,tracklon,tracklat,lres)
         print("added storm track")
 
-        
+
         fracts := (/ 0.99, 0.95, 0.9, 0.8, 0.7, 0.5 /)
         do i=0,-1; dimsizes(fracts)-1
             ; Don't redefine left and right_percentile here. That will mess up the global values.
@@ -539,6 +509,8 @@ begin
             print(date_str(f->time(itime))+": did not find > 2 unique values for y axis")
         end if
         ; meta data for sanity check
+        ; for some reason putting systemfunc("date") in the do loop resulted in random crashes
+        currentdate = systemfunc("date")
         gsn_text_ndc(wks,date_str(f->time(itime)) +\
             sprinti("~C~every %.0i nodes",stride)+\
             "~C~made " + currentdate,0.01,0.01,txres)
