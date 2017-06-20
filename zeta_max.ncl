@@ -1,5 +1,6 @@
 load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
+load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl"
 
 begin
 
@@ -55,18 +56,11 @@ begin
     g->depth = f->depth(k)
     g->x = f->x(k)
     g->y = f->y(k)
-    ; get area asssociated with each node (file created by Michael Duda)
-    a = addfile("/glade/p/work/ahijevyc/ADCIRC/duda/NOS_cells.nc","r")
-    g->areaCell = a->areaCell(k)
-
-    ; Read file that lists nodes where surface submergence state is 1
-    sfc_sub_state_file = "/glade/p/work/ahijevyc/ADCIRC/surface_submergence_state_14040.txt"
-    lines = asciiread(sfc_sub_state_file, -1, "integer")
-    inodes = lines(::2) ; asciiread reads 2 columns text into 1-D array; extract 1st column by taking every other one.
-    sfc_sub_state = new(dimsizes(f->zeta_max), "integer")
-    ; The sfc_sub_state_file lists node indices where indices are 1-based.  But ncl is zero-based.  So subtract one from the node indices.
-    sfc_sub_state(inodes-1) = 1
+    ; get area asssociated with each node (loaded with get_MHHW.ncl)
+    g->areaCell = areaCell(k)
+    ; sfc_sub_state was defined in get_MHHW.ncl
     g->sfc_sub_state = sfc_sub_state(k)
+    hgt_MHHW := hgt_MHHW(k)
 
     ; Max inundation. You can calculate volume but it doesn't make sense. This is a max over time at each point. 
     ; The inundation is never actually this much at any time.  The max water height is spread over time as it washes over the land.
@@ -80,6 +74,13 @@ begin
     inundation = mask(inundation, (g->depth).le.0 .or. (g->sfc_sub_state.eq.1), True)
     inundation@long_name = "maximum inundation at any time"
     inundation@units     = "m"
+    if(dryland.eq."MHHW")then
+        print(num(.not.ismissing(inundation))+" inundated nodes before masking nodes below MHHW=0")
+        ; Preserve nodes with missing MHHW (where Vdatum couldn't convert, like over land or deep into Gulf)
+        ; or MHHW >= 0 (above normally dry land).
+        inundation         = mask(inundation, ismissing(hgt_MHHW).or.hgt_MHHW.ge.0, True)
+        print(num(.not.ismissing(inundation))+" inundated nodes after masking nodes below MHHW=0")
+    end if
     g->inundation = inundation
 
     ; Annotate surge station observations from Hal Needham and SURGEDAT project.
@@ -196,7 +197,6 @@ begin
     obsres@gsMarkerColor = "dark green"
     obsres@gsMarkerSizeF = 0.004
     obsres@gsMarkerThicknessF = 2.
-    obsres@txFontHeightF = res@cnLineLabelFontHeightF * 1.5
     obsres@txFontColor = obsres@gsMarkerColor
     obsres@txJust = "CenterLeft"
     if(isdefined("tracklon"))then ; not applicable for NOS_OWI (doesn't use official IKE track)
@@ -359,9 +359,9 @@ begin
     gsn_text_ndc(wks, "domain "+tostring(zoom)+" "+title+"~C~"+systemfunc("date"),0.01,0.01,txres)
 
     hres                          = True
-    hres@vpXF            = 0.05
+    hres@vpXF            = 0.10
     hres@vpWidthF        = 0.20	    
-    hres@vpYF            = 0.99
+    hres@vpYF            = 0.98
     hres@vpHeightF       = 0.20
     hres@gsnHistogramBinIntervals = cnLevels
     hres@gsnHistogramMinMaxBinsOn = True
