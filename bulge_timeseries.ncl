@@ -6,6 +6,7 @@ load "/glade/p/work/ahijevyc/ncl/get_length_scale.ncl"
 load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/p/work/ahijevyc/ncl/CreateTracks.ncl"
 load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
+load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl"
 
 begin
 
@@ -17,12 +18,18 @@ begin
     end if
     if(.not.isvar("stride"))then
         stride=2
-        if(stormname.eq."IKE")then
+        if(str_get_cols(stormname,-3,-1).eq."IKE")then
             stride=10
         end if
     end if
     idir   = "/glade/scratch/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/" 
     workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
+
+    ; If True, plot only one frame (default False)
+    if(.not.isdefined("one_frame")) then
+        one_frame = False
+    end if
+
     ; zoom level
     if(.not.isdefined("zoom")) then
         zoom = 1
@@ -69,6 +76,7 @@ begin
                    sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF)
 
     k = ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
+    ; Take every stride-th node (to speed things up).
     k := k(::stride)
     if(any(ismissing(k)))then
         print("no nodes in zoom domain?")
@@ -88,31 +96,11 @@ begin
         g->depth = f->depth(k)
         g->x = f->x(k)
         g->y = f->y(k)
-        a = addfile("/glade/p/work/ahijevyc/ADCIRC/duda/NOS_cells.nc","r")
-        g->areaCell = a->areaCell(k)
+        g->areaCell = areaCell(k)
 
-        ; Read file that lists nodes where surface submergence state is 1, or "start dry nodes". 
-        ; They are actually contained in the fort.13 file, but that file has other attributes,
-        ; so it's hard to parse.  So Kate pulled that chunk of data out to this text file.  
-        ; The file lists the node number, which must be cross referenced with index of lat/lon vars or fort.14 file. 
-        sfc_sub_state_file = "/glade/p/work/ahijevyc/ADCIRC/surface_submergence_state_14040.txt"
-        lines = asciiread(sfc_sub_state_file, -1, "integer")
-        ; asciiread() reads into a 1-D array. the file is 2 columns, so read every other one,
-        ; starting with element zero to get the first column. These are the inodes. 
-        inodes = lines(::2)
-        ; Create a new variable to hold the surface submergence state.
-        sfc_sub_state = new(dimsizes(f->depth), "integer")
+        ;sfc_sub_state was defined in get_MHHW.ncl
         copy_VarCoords(f->depth, sfc_sub_state)
-        ; Set appropriate inodes to 1
-        ; The sfc_sub_state_file lists node indices in Fortran style, where indices are 1-based. 
-        ; But ncl is zero-based. So subtract one from the node indices for NCL.
-        sfc_sub_state(inodes-1) = 1
         g->sfc_sub_state = sfc_sub_state(k)
-        MHHW_file= "/glade/p/work/ahijevyc/ADCIRC/lonlatLMSL.MHHW.nc"
-        MHHW_fh = addfile(MHHW_file, "r")
-        ; Create a new variable to hold node height relative to mean higher high water.
-        hgt_MHHW = MHHW_fh->mhhw
-        printVarSummary(hgt_MHHW)
         g->hgt_MHHW = hgt_MHHW(k)
         print("made "+model_file)
     end if
@@ -124,16 +112,36 @@ begin
     wks = gsn_open_wks("png",outfile)
     timeseries_file = outfile + "."+sprintf("stride%02.0f.",stride)+domainString+".timeseries.nc"
     zeta := f->zeta ; read water height from processed (smaller) file
+    depth := f->depth
     if(minus_astronomical_tide)then
+        ; Subtract water level from run with no storm. Just astronomical tide.
+        ; This will give storm surge (the change in water level due to storm).
         a = addfile(idir+"../coldstart_extend/fort.63.nc","r")
-        ; Change missing values in astronomical tide run to zeros.
-        zeta_nostorm = where(ismissing(a->zeta),0,a->zeta)
-        print("subtracting astronomical tide from model water level")
+        surface_height = reshape(-a->depth,dimsizes(a->zeta))
+        ; Change missing values in astronomical tide run to surface height (-depth).
+        ; now zeta is height of water or land (whichever is higher).
+        zeta_nostorm = where(ismissing(a->zeta), surface_height, a->zeta)
+        ; Change missing values in storm run to surface height (-depth).
+        zeta = where(ismissing(zeta),surface_height(:,k),zeta)
+        print("subtracting astronomical tide from storm tide")
         ; Use "k" subscripts to get small slice of zeta_nostorm that matches size and shape of zeta.
         zeta = zeta - zeta_nostorm(:,k)
         zeta@minus_astronomical_tide = minus_astronomical_tide
-        print("subtracted tide")
+        zeta@long_name = "storm surge (storm tide minus astronomical tide)"
+        print("subtracted astronomical tide")
     end if
+
+    printVarSummary(zeta)
+    printMinMax(zeta,False)
+    ntime = dimsizes(zeta&time)
+    nnodes = dimsizes(depth)
+    sfc_sub_state := f->sfc_sub_state
+    hgt_MHHW      := f->hgt_MHHW
+    areaCell      := f->areaCell
+
+    date_str1 = date_str(f->time)
+
+
 
     trackfile = idir+"fort.22"
     ; fort.22 is quite different for the NOS_OWI run. it don't have lat/lon of track.
@@ -150,16 +158,6 @@ begin
     vmax   := adeck@vmax
     rad    := adeck@rad
 
-    ntime = dimsizes(zeta&time)
-    depth = f->depth
-    nnodes = dimsizes(depth)
-    sfc_sub_state := f->sfc_sub_state
-    hgt_MHHW      := f->hgt_MHHW
-
-    date_str1 = date_str(f->time)
-    Re = 6371.; radius of Earth in km
-    areaCell := f->areaCell * Re^2. * stride
-
     gsn_define_colormap(wks,"WhiteBlueGreenYellowRed")
     res@gsnDraw                  = False
     res@gsnFrame                 = False
@@ -167,15 +165,8 @@ begin
     res@cnMinLevelValF           =  1e-11
     res@cnMaxLevelValF           =  5.
     res@cnLevelSpacingF          =  0.5
-    if(False)then ; Tricky color table
-        gsn_define_colormap(wks,"StepSeq25")
-        gsn_reverse_colormap(wks)
-        res@gsnSpreadColorStart = 7
-        res@cnLevelSelectionMode = "ExplicitLevels"
-        res@lbLabelAutoStride = False
-        res@cnLevels =     (/    0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.2, 1.4, 1.6, 1.8,  2,  2.5,  3,  4,  5 /)
-        res@lbLabelStrings = (/ "0.1", "",  "", "", "0.5", "", "",  "",  "", "1", "",  "", "",   "", "2","2.5","3","4","5"/)
-    end if
+    ; Tricky color table
+    ; get_field_res(wks,'inundation',hgt_MHHW)
 
 
     res@vpXF                     =  0.2
@@ -191,7 +182,6 @@ begin
     res@cnFillMode               = "RasterFill"
     res@cnLineLabelsOn           = True
     res@cnLineLabelPlacementMode = "Constant"
-    res@cnLineLabelFontHeightF   = LabelFontHeightF
     res@lbLabelAutoStride        = True
     res@lbTitleFontHeightF       = 0.01
     res@lbTitlePosition          = "Bottom"
@@ -258,8 +248,9 @@ begin
         globalAtts@zoom = zoom
         fileattdef(g, globalAtts)
         inundation_volume = new(ntime,double,-999.); need short number for titles (default is minus 1 zillion billion)
-        inundation_volume@long_name = "inundation volume in surge zone"
+        inundation_volume@long_name = "inundation volume in inundation zone"
         inundation_volume@units = "km~S~3~N~"
+        inundation_volume@stride = stride
         inundation_volume@depth_threshold = thresh_string
         inundation_volume@left_percentile = left_percentile
         inundation_volume@right_percentile = right_percentile
@@ -269,19 +260,22 @@ begin
 
         average_depth = new(dimsizes(inundation_volume),typeof(inundation_volume))
         copy_VarMeta(inundation_volume, average_depth)
-        average_depth@long_name = "average depth in surge zone"
+        average_depth@long_name = "average depth in inundation zone"
         average_depth@units = "m"
+        average_depth@stride = stride
         g->average_depth=average_depth
 
         inundation_area = new(dimsizes(inundation_volume),typeof(inundation_volume))
         copy_VarMeta(inundation_volume, inundation_area)
-        inundation_area@long_name = "area of surge zone"
+        inundation_area@long_name = "area of inundation zone"
         inundation_area@units = "km~S~2~N~"
+        inundation_area@stride = stride
         g->inundation_area=inundation_area
 
         inundation_true = new((/ntime,nnodes/),byte)
         copy_VarAtts(inundation_volume, inundation_true)
         inundation_true@long_name = "1b=inundated"
+        inundation_true@stride = stride
         inundation_true!0="time"
         inundation_true&time = zeta&time
         inundation_true!1="node"
@@ -289,13 +283,14 @@ begin
 
         length_scale = new(dimsizes(inundation_volume),typeof(inundation_volume))
         copy_VarMeta(inundation_volume, length_scale)
-        length_scale@long_name = "length_scale of surge zone"
+        length_scale@long_name = "length_scale of inundation zone"
         length_scale@units = "km"
+        length_scale@stride = stride
         g->length_scale = length_scale
 
         volume_in_ctrl = new(dimsizes(inundation_volume),typeof(inundation_volume))
         copy_VarMeta(inundation_volume, volume_in_ctrl)
-        volume_in_ctrl@long_name = "inundation volume in control surge zone"
+        volume_in_ctrl@long_name = "inundation volume in control inundation zone"
         g->volume_in_ctrl=volume_in_ctrl
 
     end if
@@ -312,7 +307,7 @@ begin
     ; meta data for sanity check
     txres = True
     txres@txFontHeightF = 0.01
-    txres@txJust  = "BottomLeft"
+    txres@txJust        = "BottomLeft"
 
     ; Dot nodes 
     ssres                  = True
@@ -379,36 +374,53 @@ begin
         dist_right = dist * -sin(LorR/180.*3.141592)
         zeta1 := zeta(itime,:)
 
-        ; inundation is water height above MSL minus surface height above MSL (depth is negative for positive height above MSL)
-        inundation = zeta1 + depth
-        copy_VarMeta(zeta1, inundation)
-        inundation@long_name = "depth of water over normally dry land ("+dryland+">=0)"
+        if(.not.minus_astronomical_tide)then
+            ; inundation is water height minus surface height (depth is negative surface height)
+            inundation = zeta1 + depth
+            copy_VarMeta(zeta1, inundation)
+            inundation@long_name = "depth of water over normally dry land ("+dryland+">=0)"
+        else
+            inundation = zeta1
+            ; Plot storm surge (minus_astronomical_tide=True).
+            res@sfDataArray    = inundation
+            map := gsn_csm_contour_map(wks,inundation,res)
+        end if
 
-        ; Preserve start dry land.
-        ; In other words, mask ocean, but not low-lying land nodes below mean sea level.
+        res@lbTitleString  = inundation@units
+
+        ; Limit volume to Surge Zone
+
+        ; Mask ocean
+        ; In other words, mask all nodes with depth>0, but not start-dry nodes.
         ; sfc_sub_state is missing or 1. 1 is land that starts dry but depth>0 (is below MSL). 
-        inundation         = mask(inundation, depth.le.0 .or. sfc_sub_state.eq.1, True)
-        print(num(.not.ismissing(inundation))+" inundated (depth=>0) nodes")
+        inundation = mask(inundation, depth.le.0 .or. sfc_sub_state.eq.1, True)
+        print(num(.not.ismissing(inundation))+" inundated (=>0) nodes")
 
         if(dryland.eq."MHHW")then
-            ; Preserve nodes with missing MHHW (where Vdatum couldn't convert, like over land or deep into Gulf)
+            ; Don't consider nodes below the mean higher high water mark as normally dry. Mask them.
+            ; Use MHHW to mask nodes, but don't apply mask where MHHW is missing. This happens where(where Vdatum couldn't convert, like over land or deep into Gulf)
             ; or MHHW >= 0 (above normally dry land).
-            inundation         = mask(inundation, ismissing(hgt_MHHW).or.hgt_MHHW.ge.0, True)
+            inundation = mask(inundation, ismissing(hgt_MHHW).or.hgt_MHHW.ge.0, True)
             print(num(.not.ismissing(inundation))+" inundated nodes after masking nodes below MHHW=0")
         end if
 
-        res@sfDataArray    = inundation
-        res@lbTitleString  = inundation@units
-        map := gsn_csm_contour_map(wks,inundation,res)
+        if(.not.minus_astronomical_tide)then
+            ; Plot inundation (minus_astronomical_tide=False).
+            ; If minus_astronomical_tide=True, storm surge has already been plotted above.
+            res@sfDataArray    = inundation
+            map := gsn_csm_contour_map(wks,inundation,res)
+        end if
 
-        volume = areaCell * inundation/1000. ; areaCell has already been multiplied by stride
+        volume = areaCell * inundation/1000. * stride
         ; added thresh threshold Feb 23, 2016. only count nodes where inundation exceeds this depth.
         ; Set volumes to zero where inundation depth is less than threshold.
         ; This affects length scale, average depth, total inundation volume, inundation area...
         printMinMax(inundation,False)
+        
         volume = where(.not.ismissing(inundation).and.inundation.ge.thresh,volume,0.) 
         tmp := maxind(volume)
-        print("max inundation node in domain: areaCell="+tostring(areaCell(tmp))+"sq km, inundation="+\
+        print("node with greatest inundation volume (area*inundation): areaCell="+tostring(areaCell(tmp))+\
+            "sq km, inundation="+\
             tostring(inundation(tmp))+"m, "+tostring(res@sfXArray(tmp))+"E "+tostring(res@sfYArray(tmp))+"N")
         if(sum(volume).eq.0)then
             print("no inundation above threshold. skipping time.")
@@ -438,15 +450,15 @@ begin
             inundation_volume(itime) = sum(volume(bi))
             g->inundation_volume(itime) = (/ inundation_volume(itime) /)
             g->average_depth(itime) = sum(inundation(bi)*areaCell(bi))/ sum(areaCell(bi))
-            g->inundation_area(itime) = sum(areaCell(bi)) ; areaCell has already been multiplied by stride
+            g->inundation_area(itime) = sum(areaCell(bi)) * stride
             ; remember to reset zeroes or else you get 1's from previous runs.
             g->inundation_true(itime,:) = 0b
             g->inundation_true(itime,bi) = 1b
         end if
 
         ; tried to use gsnLeftString resource but it wouldn't update the resource on the map object after I created map.
-        desc = sprintf("surge zone defined by %.0f",right_percentile-left_percentile)+"% of volume (" +sprintf("%.1f",left_percentile)+"% to the left and "+sprintf("%.1f",100.-right_percentile)+"% to the right) where depth >= "+thresh_string
-        desc = desc +"~C~surge zone volume " + sprintf(":%6.2f", inundation_volume(itime)) + inundation_volume@units + "   length:" + sprintf("%4.0fkm",right_length_km-left_length_km) + "   average depth: " + sprintf("%.1fm",g->average_depth(itime)) + "    area: "+ sprintf("%.0f km~S~2~N~",g->inundation_area(itime))
+        desc = sprintf("inundation zone defined by %.0f",right_percentile-left_percentile)+"% of volume (" +sprintf("%.1f",left_percentile)+"% to the left and "+sprintf("%.1f",100.-right_percentile)+"% to the right) where depth >= "+thresh_string
+        desc = desc +"~C~inundation zone volume " + sprintf(":%6.2f", inundation_volume(itime)) + inundation_volume@units + "   length:" + sprintf("%4.0fkm",right_length_km-left_length_km) + "   average depth: " + sprintf("%.1fm",g->average_depth(itime)) + "    area: "+ sprintf("%.0f km~S~2~N~",g->inundation_area(itime)) + "~C~normally-dry land datum=" + dryland
         ; Inundated nodes in control run.
         ; If you get error about file (c) isn't defined, just run again.
         icontrol := ind(c->inundation_true(maxind(c->inundation_volume),:).eq.1)
@@ -455,7 +467,7 @@ begin
             if(False)then
                 ; Draw pink dots
                 dots := gsn_add_polymarker(wks,map,res@sfXArray(icontrol),res@sfYArray(icontrol),ssres)
-                desc = desc + "~C~surge zone volume intersecting surge zone of control run (pink): " + sprintf("%6.2fkm~S~3~N~",volume_in_ctrl(itime))
+                desc = desc + "~C~inundation zone volume intersecting inundation zone of control run (pink): " + sprintf("%6.2fkm~S~3~N~",volume_in_ctrl(itime))
             end if
         end if
         gsn_text_ndc(wks, desc, 0.204, 0.63, txres)
@@ -463,9 +475,9 @@ begin
         ; Use (/ /) to avoid creating degenerate (1-element) dimensions like 'ncl137'
         g->volume_in_ctrl(itime) = (/ volume_in_ctrl(itime) /)
 
-        if(.not.first_frame)then
-            ;print("not drawing this frame")
-            ;continue
+        if(.not.first_frame.and.one_frame)then
+            print("not drawing this frame")
+            continue
         end if
         first_frame = False
 
