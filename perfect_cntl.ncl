@@ -1,5 +1,6 @@
 load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
+load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl"
 
 begin
 
@@ -57,16 +58,9 @@ begin
     files = (/ obs_file, model_file /)
     full_files = (/ obsdir, modeldir /) + "maxele.63.nc"
 
-    ; get area asssociated with each node (file created by Michael Duda)
-    a = addfile("/glade/p/work/ahijevyc/ADCIRC/duda/NOS_cells.nc","r")
-    ; Read file that lists nodes where surface submergence state is 1
-    sfc_sub_state_file = "/glade/p/work/ahijevyc/ADCIRC/surface_submergence_state_14040.txt"
-    lines = asciiread(sfc_sub_state_file, -1, "integer")
-    inodes = lines(::2) ; asciiread reads 2 columns text into 1-D array; extract 1st column by taking every other one.
-    sfc_sub_state = new(dimsizes(f->zeta_max), "integer")
-    ; The sfc_sub_state_file lists node indices where indices are 1-based.  But ncl is zero-based.  So subtract one from the node indices.
-    sfc_sub_state(inodes-1) = 1
+    ; sfc_sub_state was defined in get_MHHW.ncl
     sfc_sub_state := sfc_sub_state(k)
+    hgt_MHHW := hgt_MHHW(k)
 
     ; loop through control (i=0) and model (i=1)
     do i=0,1
@@ -81,8 +75,8 @@ begin
         g->depth = f->depth(k)
         g->x = f->x(k)
         g->y = f->y(k)
-        ; get area asssociated with each node (file created by Michael Duda)
-        g->areaCell = a->areaCell(k)
+        ; get area asssociated with each node (loaded above with get_MHHW.ncl)
+        g->areaCell = areaCell(k)
 
         ; Max inundation. You can calculate volume but it doesn't make sense. This is a max over time at each point. 
         ; The inundation is never actually this much at any time.  The max water height is spread over time as it washes over the land.
@@ -96,6 +90,13 @@ begin
         inundation = mask(inundation, (g->depth).le.0 .or. (sfc_sub_state.eq.1), True)
         inundation@long_name = "maximum inundation (all times)"
         inundation@units     = "m"
+        if(dryland.eq."MHHW")then
+            print(num(.not.ismissing(inundation))+" inundated nodes before masking nodes below MHHW=0")
+            ; Preserve nodes with missing MHHW (where Vdatum couldn't convert, like over land or deep into Gulf)
+            ; or MHHW >= 0 (above normally dry land).
+            inundation         = mask(inundation, ismissing(hgt_MHHW).or.hgt_MHHW.ge.0, True)
+            print(num(.not.ismissing(inundation))+" inundated nodes after masking nodes below MHHW=0")
+        end if
         g->inundation = inundation
     end do
 
@@ -116,11 +117,9 @@ begin
     f = addfile(model_file,"r")
     nnodes = dimsizes(f->zeta_max) ; number of nodes
     inundation = f->inundation
-    zeta_max = f->zeta_max
-    depth = f->depth
-
-    Re = 6371.; radius of Earth in km
-    areaCell := f->areaCell * Re^2.
+    zeta_max   = f->zeta_max
+    depth      = f->depth
+    areaCell  := f->areaCell
 
     gsn_define_colormap(wks,"WhiteBlueGreenYellowRed")
     res@cnLinesOn                = False
@@ -164,7 +163,7 @@ begin
     end getvalues
 
     txres = True
-    txres@txFontHeightF = 0.015
+    txres@txFontHeightF = 0.01
     txres@txJust        = "BottomLeft"
     gsn_text_ndc(wks, "domain "+tostring(zoom)+"~C~"+systemfunc("date"),0.01,0.01,txres)
     ; Draw a dot on each node.
