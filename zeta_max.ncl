@@ -67,7 +67,7 @@ begin
     hgt_MHHW := hgt_MHHW(k)
 
     ; Max inundation. You can calculate volume but it doesn't make sense. This is a max over time at each point. 
-    ; The inundation is never actually this much at any time.  The max water height is spread over time as it washes over the land.
+    ; The inundation is never actually this much at any time.  The max water height is spread over time as the peak washes inland.
     ; That's why the number here is so much larger than the number in the instantaneous bulge_timeseries. 
     inundation = g->zeta_max + g->depth
     ; Set missing values to zero. Don't use num() to count non-missing values (zero is not missing but is not True either).
@@ -138,7 +138,6 @@ begin
     res@gsnFrame = False
 
     res@pmTickMarkDisplayMode = "Always"    ; Turn on map tickmarks.
-    res@cnConstFLabelOn       = False ; don't say "CONSTANT FIELD - VALUE IS 0"
     lres                      = True
     lres@gsLineThicknessF     =  4.
 
@@ -157,10 +156,12 @@ begin
         "cnFillColors" : cnFillColors
     end getvalues
 
+    ; Annotate plot with domain info and creation date.
     txres = True
     txres@txFontHeightF = 0.015
     txres@txJust        = "BottomLeft"
     gsn_text_ndc(wks, "domain "+tostring(zoom)+"~C~"+systemfunc("date"),0.01,0.01,txres)
+
     ; Draw a dot on each node.
     noderes                   = True
     noderes@gsMarkerIndex     = 1
@@ -172,6 +173,8 @@ begin
     strs = str_split_csv(lines, ",", 0)
     tmp :=dimsizes(strs)
     ncol = tmp(1)
+    ; There are a couple different types of observation files...
+    ; They have different numbers of columns.
     if(ncol .gt. 5)then
         stormtide_m = tofloat(strs(1:,10))
         x = tofloat(strs(1:,22))
@@ -187,6 +190,7 @@ begin
         confidence = 3
         gtype = strs(:,4)
     end if
+
     obsres = True
     obsres@gsMarkerIndex = 16
     obsres@gsMarkerColor = "dark green"
@@ -194,15 +198,19 @@ begin
     obsres@gsMarkerThicknessF = 2.
     obsres@txFontColor = obsres@gsMarkerColor
     obsres@txJust = "CenterLeft"
+
     if(isdefined("tracklon"))then ; not applicable for NOS_OWI (doesn't use official IKE track)
         storm_track := gsn_add_polyline(wks,map,tracklon,tracklat,lres)
     end if
-    
+   
+    ; Create array to hold distance errors, one value for each observation.
     dist_errs = new(dimsizes(lines),"double")
     dist_errs@long_name = "distance from observation to closest node"
     dist_errs@units = "m"
+
     obs       = new(dimsizes(lines),"double")
     model     = new(dimsizes(lines),"double")
+
     ; for each surge station observation
     do n = 0, dimsizes(x)-1
         lonlatstr = sprintf("%9.4fE",x(n))+sprintf("%8.4fN",y(n))
@@ -224,8 +232,9 @@ begin
         end if
         obs(n) = stormtide_m(n)
         ; Find closest node to surge station
-        ;dist = gc_latlon(res@sfYArray,res@sfXArray,onedtond(y(n),dimsizes(res@sfYArray)),onedtond(x(n),dimsizes(res@sfXArray)),2,-4)
-        dist = gc_latlon(res@sfYArray,res@sfXArray,conform(res@sfYArray,y(n),-1),conform(res@sfXArray,x(n),-1),2,-4)
+        iu := -4; return the distance in kilometers; negative denotes longitudes -180 to 180.
+        ;dist = gc_latlon(res@sfYArray,res@sfXArray,onedtond(y(n),dimsizes(res@sfYArray)),onedtond(x(n),dimsizes(res@sfXArray)),2,iu)
+        dist = gc_latlon(res@sfYArray,res@sfXArray,conform(res@sfYArray,y(n),-1),conform(res@sfXArray,x(n),-1),2,iu)
         i = minind(dist)
         if(dist(i).gt.dist_thresh/1000.)then
             print(lonlatstr+sprintf("%4.0fm",1000*dist(i))+" zeta_max="+sprintf("%6.2fm",zeta_max(i)) + " n="+sprintf("%4.0f",n)+" obs="+sprintf("%4.1fm",obs(n))+" model="+sprintf("%4.1fm",model(n))+" closest node too far")
@@ -253,8 +262,6 @@ begin
             print("n="+sprintf("%4.0f",n)+" obs="+sprintf("%5.2fm",obs(n))+" model="+sprintf("%5.2fm",model(n))+" conf="+sprintf("%.0f",confidence(n)))
         end if
         ; draw dot (NhlTmarkerIndex=1) on node
-        noderes@gsMarkerIndex = 1
-        noderes@gsMarkerColor = "black"
         gsn_polymarker(wks,map,res@sfXArray(i),res@sfYArray(i),noderes)
         ; Mark observation
         gsn_polymarker(wks,map,x(n),y(n),obsres)
