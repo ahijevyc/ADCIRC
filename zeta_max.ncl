@@ -10,7 +10,11 @@ begin
     if(.not.isvar("stormname"))then
         stormname = "IKE"
     end if
-    workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
+    basedir = "/glade/p/work/ahijevyc/ADCIRC/"
+    modeldir = basedir + stormname+"/"+modelstr+"/"
+    obsdir   = basedir + stormname+"/observations/"
+    ; ike_SSS_high_water.csv created by get_USGS_high_water.csh from pubs.usgs.gov/of/2008/1365/downloads
+    obs_file = obsdir + stormname+"_SSS_high_water.csv"
     ; zoom level
     if(.not.isdefined("zoom")) then
         zoom = 1
@@ -45,8 +49,8 @@ begin
     ; Assign domain min/max lat/lon attributes to res.
     res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
 
-    print("opening "+workdir+"maxele.63.nc")
-    f = addfile(workdir+"maxele.63.nc","r")
+    print("opening "+modeldir+"maxele.63.nc")
+    f = addfile(modeldir+"maxele.63.nc","r")
 
     k = ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
     model_file = "/tmp/"+stormname+"."+modelstr+".zoom"+zoom+".nc" ; temporary small grid
@@ -59,7 +63,7 @@ begin
     ; get area asssociated with each node (loaded with get_MHHW.ncl)
     g->areaCell = areaCell(k)
     ; sfc_sub_state was defined in get_MHHW.ncl
-    g->sfc_sub_state = sfc_sub_state(k)
+    sfc_sub_state := sfc_sub_state(k)
     hgt_MHHW := hgt_MHHW(k)
 
     ; Max inundation. You can calculate volume but it doesn't make sense. This is a max over time at each point. 
@@ -71,7 +75,7 @@ begin
         inundation(ind(ismissing(g->zeta_max))) = 0.
     end if
     ; Only retain land values and low-lying land nodes below MSL (sfc_sub_state=1, or "startDry" nodes). 
-    inundation = mask(inundation, (g->depth).le.0 .or. (g->sfc_sub_state.eq.1), True)
+    inundation = mask(inundation, (g->depth).le.0 .or. (sfc_sub_state.eq.1), True)
     inundation@long_name = "maximum inundation at any time"
     inundation@units     = "m"
     if(dryland.eq."MHHW")then
@@ -83,20 +87,14 @@ begin
     end if
     g->inundation = inundation
 
-    ; Annotate surge station observations from Hal Needham and SURGEDAT project.
-    ; csv file is columns K, V, and W from ./observations/Ike_2008.xlsx (copied from pecan:/mmmtmp/ahijevyc Jan 2016) 
-    obs_file = "./observations/Ike_2008_surge_station_obs.csv"
-    obs_file = "./"+stormname+"/observations/"+stormname+"_SURGEDAT.csv"
-    ; ike_SSS_high_water.csv created by get_USGS_high_water.csh from pubs.usgs.gov/of/2008/1365/downloads
-    obs_file = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/observations/"+stormname+"_SSS_high_water.csv"
     ; Create stats file that may be plotted by python in Jupyter notebook. 
-    if(isfilepresent(outfile+".nc"))then
+    if(fileexists(outfile+".nc"))then
         system("rm -v "+outfile+".nc")
     end if
     out2 = addfile(outfile+".nc","c")
     
     wks = gsn_open_wks("png",outfile)
-    trackfile = workdir+"fort.22"
+    trackfile = modeldir+"fort.22"
     ; fort.22 is quite different for the NOS_OWI run. it don't have lat/lon of track.
     print("reading "+trackfile)
     adeck := read_atcf(trackfile)
@@ -106,12 +104,9 @@ begin
     f = addfile(model_file,"r")
     nnodes = dimsizes(f->zeta_max) ; number of nodes
     inundation = f->inundation
-    zeta_max = f->zeta_max
-    depth = f->depth
-    sfc_sub_state := f->sfc_sub_state
-
-    Re = 6371.; radius of Earth in km
-    areaCell := f->areaCell * Re^2.
+    zeta_max   = f->zeta_max
+    depth      = f->depth
+    areaCell  := f->areaCell
 
     gsn_define_colormap(wks,"WhiteBlueGreenYellowRed")
     res@cnLinesOn                = False
@@ -217,7 +212,7 @@ begin
             continue
         end if
         if(gtype(n).ne."surge site")then
-            print("Skipping "+gtype(n))
+            print("Not a surge site. Skipping "+gtype(n))
             continue
         end if
         ; skip if confidence is less than 3
@@ -332,22 +327,29 @@ begin
         "trXMaxF" : xmax
     end getvalues
     xrange = (/ xyres@trXMinF, xmax /)
-    xyres@xyExplicitLabels = "best-fit"
-    xyres@xyMarkLineMode     = "Lines"
-    xyres@xyLineColor        = xyres@xyMarkerColor
-    delete(xyres@xyLineColors)
-    delete(xyres@xyMarkerThicknesses)
-    delete(xyres@xyLineThicknesses)
-    delete(xyres@xyMarkLineModes)
-    best_fit = gsn_csm_xy(wks, xrange, rc*xrange + rc@yintercept,xyres) 
-    xyres@xyExplicitLabels   = "1:1"
-    xyres@xyLineColor        = "black"
-    one2one  = gsn_csm_xy(wks, xrange, xrange, xyres)
+    bfres = True
+    bfres@gsnDraw            = False
+    bfres@gsnFrame           = False
+    bfres@xyLabelMode        = "Custom"
+    bfres@xyExplicitLabels = "best-fit"
+    bfres@xyMarkLineMode     = "Lines"
+    bfres@xyLineColor        = xyres@xyMarkerColor
+    best_fit = gsn_csm_xy(wks, xrange, rc*xrange + rc@yintercept,bfres) 
+    bfres@xyExplicitLabels   = "1:1"
+    bfres@xyLineColor        = "black"
+    one2one  = gsn_csm_xy(wks, xrange, xrange, bfres)
     overlay(plot,best_fit)
     overlay(plot,one2one)
     draw(plot)
     frame(wks)
 
+    ; Scatterplot on frame of its own.
+    xyres@gsnMaximize         = True                  ; maximize plot in frame
+    plot  = gsn_csm_xy (wks,obs,model,xyres)    ; create scatterplot
+    overlay(plot,best_fit)
+    overlay(plot,one2one)
+    draw(plot)
+    frame(wks)
 
     volumes = areaCell/1000.*inundation
     res@sfDataArray      = inundation
@@ -358,6 +360,7 @@ begin
 
     gsn_text_ndc(wks, "domain "+tostring(zoom)+" "+title+"~C~"+systemfunc("date"),0.01,0.01,txres)
 
+    ; Histogram
     hres                          = True
     hres@vpXF            = 0.10
     hres@vpWidthF        = 0.20	    
