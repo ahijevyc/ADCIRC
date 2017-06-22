@@ -10,10 +10,9 @@ begin
     if(.not.isvar("stormname"))then
         stormname = "IKE"
     end if
-    basedir = "/glade/scratch/ahijevyc/ADCIRC/"
-    modeldir = basedir + stormname+"/"+modelstr+"/" 
+    basedir = "/glade/p/work/ahijevyc/ADCIRC/"
+    modeldir = basedir + stormname+"/"+modelstr+"/"
     obsdir   = basedir + stormname+"/control/" 
-    workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
     ; zoom level
     if(.not.isdefined("zoom")) then
         zoom = 1
@@ -184,7 +183,6 @@ begin
     obsres@gsMarkerColor = "dark green"
     obsres@gsMarkerSizeF = 0.003
     obsres@gsMarkerThicknessF = 2.
-    obsres@txFontHeightF = res@cnLineLabelFontHeightF * 1.5
     obsres@txFontColor = obsres@gsMarkerColor
     obsres@txJust = "CenterLeft"
     if(isdefined("tracklon"))then ; not applicable for NOS_OWI (doesn't use official IKE track)
