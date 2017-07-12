@@ -93,7 +93,10 @@ begin
     end if
     out2 = addfile(outfile+".nc","c")
     
-    wks = gsn_open_wks("png",outfile)
+    wtype    = "png"
+    wtype@wkWidth  = 2048 
+    wtype@wkHeight = 2048 
+    wks = gsn_open_wks(wtype,outfile)
     trackfile = modeldir+"fort.22"
     ; fort.22 is quite different for the NOS_OWI run. it don't have lat/lon of track.
     print("reading "+trackfile)
@@ -309,14 +312,14 @@ begin
     xyres@vpHeightF       = 0.20 
 
     xyres@gsnMaximize         = False                  ; maximize plot in frame
-    xyres@xyMarkLineModes     = (/"Markers"/)  ; choose which have markers
+    xyres@xyMarkLineMode      = "Markers"  ; choose which have markers
     xyres@xyMarker            = obsres@gsMarkerIndex               ; choose type of marker 
     xyres@xyMarkerColor       = "dark green"                ; Marker color
     xyres@xyMarkerSizeF       = obsres@gsMarkerSizeF         ; Marker size (default 0.01)
-    xyres@xyMarkerThicknesses   = (/obsres@gsMarkerThicknessF/) 
-    xyres@xyDashPatterns      = (/"Solid"/)                
-    xyres@xyLineThicknesses   = (/1/) 
-    xyres@xyLineColors        = (/xyres@xyMarkerColor/)
+    xyres@xyMarkerThicknessF  = obsres@gsMarkerThicknessF 
+    xyres@xyDashPattern       = "Solid"               
+    xyres@xyLineThicknessF    = 1 
+    xyres@xyLineColor         = xyres@xyMarkerColor
     xyres@xyLabelMode         = "Custom"
     xyres@gsnShape            = True
     xyres@trYMinF             = 0.
@@ -338,9 +341,11 @@ begin
     bfres@gsnDraw            = False
     bfres@gsnFrame           = False
     bfres@xyLabelMode        = "Custom"
+    bfres@xyLineLabelFontHeightF = 0.02
     bfres@xyExplicitLabels = "best-fit"
     bfres@xyMarkLineMode     = "Lines"
     bfres@xyLineColor        = xyres@xyMarkerColor
+    bfres@xyLineThicknessF   = 2.0
     best_fit = gsn_csm_xy(wks, xrange, rc*xrange + rc@yintercept,bfres) 
     bfres@xyExplicitLabels   = "1:1"
     bfres@xyLineColor        = "black"
@@ -356,6 +361,7 @@ begin
     overlay(plot,best_fit)
     overlay(plot,one2one)
     draw(plot)
+    gsn_text_ndc(wks, "domain "+tostring(zoom)+"~C~"+systemfunc("date"),0.01,0.01,txres)
     frame(wks)
 
     volumes = areaCell/1000.*inundation
@@ -364,8 +370,6 @@ begin
     title = "inundation swath volume = "+sprintf("%.1f", sum(volumes))+" km~S~3~N~"
     map := gsn_csm_contour_map(wks,inundation,res)
 
-
-    gsn_text_ndc(wks, "domain "+tostring(zoom)+" "+title+"~C~"+systemfunc("date"),0.01,0.01,txres)
 
     ; Histogram
     hres                          = True
@@ -379,6 +383,7 @@ begin
     hres@tiMainString             = res@gsnCenterString
     hres@gsFillColor              = cnFillColors
     plot := gsn_histogram(wks,inundation,hres)
+    gsn_text_ndc(wks, "domain "+tostring(zoom)+" "+title+"~C~"+systemfunc("date"),0.01,0.01,txres)
     ;plot := gsn_histogram(wks,dist_errs,hres)
     ;end do ; dist_thresh loop
 
