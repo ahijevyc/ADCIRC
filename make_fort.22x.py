@@ -1,4 +1,5 @@
 #!/bin/env python
+
 from netCDF4 import Dataset
 import numpy as np
 import glob,sys,datetime
@@ -6,10 +7,29 @@ import pdb
 
 # Read u10 and v10 (or slp) from WRF lat-lon files and create fort.222 - fort.224
 #
+"""
+The 1st script interpolates to a destination lat-lon grid. Usage:
+ncl /glade/p/work/ahijevyc/ncl/interpolateWRF.ncl
+
+
+and the 2nd one outputs the fort.22x files.  The fort.22x file could be fort.221 or fort.222 or fort.223 or fort.224, depending on the arguments provided. 1st argument is the grid ("d01", "d02", or "d03"). 2nd argument is "u" or "slp".
+
+Here is the expected string of commands:
+
+python /glade/p/work/ahijevyc/ADCIRC/make_fort.22x.py d01 slp > fort.221
+python /glade/p/work/ahijevyc/ADCIRC/make_fort.22x.py d01 u > fort.222
+python /glade/p/work/ahijevyc/ADCIRC/make_fort.22x.py d02 slp > fort.223 [optional]
+python /glade/p/work/ahijevyc/ADCIRC/make_fort.22x.py d02 u > fort.224 [optional]
+
+where d01 is the big domain and d02 is the nested domain.
+
+"""
+
+
 # Formatting based on adcirc.org/home/documentation/users-manual-v51/input-file-descriptions/single-file-meteorological-forcing-input-fort-22/ accessed June 15, 2017 and Kate Fossell's experience
 
 # Location of lat-lon files (created with /glade/p/work/ahijevyc/ncl/interpolateWRF.ncl)
-idir = "/glade/scratch/ahijevyc/ADCIRC/IKE/wrf/mem_1/"
+idir = "/glade/scratch/ahijevyc/ADCIRC/IRMA/ncar_ensf/2017090800/ens_1/"
 
 # Grid d02 or d03
 grid = sys.argv[1]
@@ -25,7 +45,9 @@ if field not in ['u','slp']:
 
 search_str= idir+"wrfout_"+grid+"_????-??-??_??:??:??_latlon.nc"
 files = sorted(glob.glob(search_str))
-#print "found", len(files), "files", search_str
+if len(files) == 0:
+    print "found", len(files), "files", search_str
+    sys.exit(1)
 
 # Print array in 8 columns.
 # Sure there is a built-in function for this but I don't know it yet.
