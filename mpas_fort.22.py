@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python
 
 from netCDF4 import Dataset, chartostring
 import numpy as np
