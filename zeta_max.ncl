@@ -2,13 +2,15 @@ load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
 load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl"
 
+; Compare maximum inundation heights at nearest model point and observed point.
+
 begin
 
     if(.not.isvar("modelstr"))then
         modelstr = "control"
     end if
     if(.not.isvar("stormname"))then
-        stormname = "IKE"
+        stormname = "IRMA"
     end if
     basedir = "/glade/p/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
