@@ -2,17 +2,19 @@ load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
 load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl"
 
+; Compare maximum inundation heights in control and perturbed runs.
+
 begin
 
     if(.not.isvar("modelstr"))then
         modelstr = "control"
     end if
     if(.not.isvar("stormname"))then
-        stormname = "IKE"
+        stormname = "IRMA"
     end if
     basedir = "/glade/p/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
-    obsdir   = basedir + stormname+"/control/" 
+    obsdir   = basedir + stormname+"/control/"
     ; zoom level
     if(.not.isdefined("zoom")) then
         zoom = 1
@@ -100,12 +102,15 @@ begin
     end do
 
     ; Create stats file that may be plotted by python in Jupyter notebook. 
-    if(isfilepresent(outfile+".nc"))then
+    if(fileexists(outfile+".nc"))then
         system("rm -v "+outfile+".nc")
     end if
     out2 = addfile(outfile+".nc","c")
     
-    wks = gsn_open_wks("png",outfile)
+    wtype    = "png"
+    wtype@wkWidth  = 2048 
+    wtype@wkHeight = 2048 
+    wks = gsn_open_wks(wtype,outfile)
     trackfile = modeldir+"fort.22"
     ; fort.22 is quite different for the NOS_OWI run. it don't have lat/lon of track.
     print("reading "+trackfile)
@@ -161,10 +166,12 @@ begin
         "cnFillColors" : cnFillColors
     end getvalues
 
+    ; Annotate plot with domain info and creation date.
     txres = True
-    txres@txFontHeightF = 0.01
+    txres@txFontHeightF = 0.015
     txres@txJust        = "BottomLeft"
     gsn_text_ndc(wks, "domain "+tostring(zoom)+"~C~"+systemfunc("date"),0.01,0.01,txres)
+
     ; Draw a dot on each node.
     noderes                   = True
     noderes@gsMarkerIndex     = 1
@@ -181,10 +188,11 @@ begin
     obsres = True
     obsres@gsMarkerIndex = 16
     obsres@gsMarkerColor = "dark green"
-    obsres@gsMarkerSizeF = 0.003
+    obsres@gsMarkerSizeF = 0.004
     obsres@gsMarkerThicknessF = 2.
     obsres@txFontColor = obsres@gsMarkerColor
     obsres@txJust = "CenterLeft"
+
     if(isdefined("tracklon"))then ; not applicable for NOS_OWI (doesn't use official IKE track)
         storm_track := gsn_add_polyline(wks,map,tracklon,tracklat,lres)
     end if
@@ -231,14 +239,14 @@ begin
     xyres@vpHeightF       = 0.20 
 
     xyres@gsnMaximize         = False                  ; maximize plot in frame
-    xyres@xyMarkLineModes     = (/"Markers"/)  ; choose which have markers
+    xyres@xyMarkLineMode      = "Markers"  ; choose which have markers
     xyres@xyMarker            = obsres@gsMarkerIndex               ; choose type of marker 
     xyres@xyMarkerColor       = "dark green"                ; Marker color
     xyres@xyMarkerSizeF       = obsres@gsMarkerSizeF         ; Marker size (default 0.01)
-    xyres@xyMarkerThicknesses   = (/obsres@gsMarkerThicknessF/) 
-    xyres@xyDashPatterns      = (/"Solid"/)                
-    xyres@xyLineThicknesses   = (/1/) 
-    xyres@xyLineColors        = (/xyres@xyMarkerColor/)
+    xyres@xyMarkerThicknessF  = obsres@gsMarkerThicknessF 
+    xyres@xyDashPattern       = "Solid"               
+    xyres@xyLineThicknessF    = 1 
+    xyres@xyLineColor         = xyres@xyMarkerColor
     xyres@xyLabelMode         = "Custom"
     xyres@gsnShape            = True
     xyres@trYMinF             = 0.
@@ -256,17 +264,19 @@ begin
         "trXMaxF" : xmax
     end getvalues
     xrange = (/ xyres@trXMinF, xmax /)
-    xyres@xyExplicitLabels = "best-fit"
-    xyres@xyMarkLineMode     = "Lines"
-    xyres@xyLineColor        = xyres@xyMarkerColor
-    delete(xyres@xyLineColors)
-    delete(xyres@xyMarkerThicknesses)
-    delete(xyres@xyLineThicknesses)
-    delete(xyres@xyMarkLineModes)
-    best_fit = gsn_csm_xy(wks, xrange, rc*xrange + rc@yintercept,xyres) 
-    xyres@xyExplicitLabels   = "1:1"
-    xyres@xyLineColor        = "black"
-    one2one  = gsn_csm_xy(wks, xrange, xrange, xyres)
+    bfres = True
+    bfres@gsnDraw            = False
+    bfres@gsnFrame           = False
+    bfres@xyLabelMode        = "Custom"
+    bfres@xyLineLabelFontHeightF = 0.02
+    bfres@xyExplicitLabels = "best-fit"
+    bfres@xyMarkLineMode     = "Lines"
+    bfres@xyLineColor        = xyres@xyMarkerColor
+    bfres@xyLineThicknessF   = 2.0
+    best_fit = gsn_csm_xy(wks, xrange, rc*xrange + rc@yintercept,bfres) 
+    bfres@xyExplicitLabels   = "1:1"
+    bfres@xyLineColor        = "black"
+    one2one  = gsn_csm_xy(wks, xrange, xrange, bfres)
     overlay(plot,best_fit)
     overlay(plot,one2one)
     draw(plot)
