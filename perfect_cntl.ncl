@@ -195,6 +195,7 @@ begin
 
     if(isdefined("tracklon"))then ; not applicable for NOS_OWI (doesn't use official IKE track)
         storm_track := gsn_add_polyline(wks,map,tracklon,tracklat,lres)
+        draw(map) ; lres@gsnDraw=True did not work
     end if
 
     tmp := maxind(abs(obs-model))
