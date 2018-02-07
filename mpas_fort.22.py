@@ -49,6 +49,7 @@ parser.add_argument('--latmax', type=float, default=  90., help='maximum latitud
 parser.add_argument('--lonmin', type=float, default=-180., help='minimum longitude (deg) (-180 to 180)')
 parser.add_argument('--lonmax', type=float, default= 180., help='maximum longitude (deg) (-180 to 180)')
 parser.add_argument('-f', '--force', action='store_true', help='force overwrite')
+parser.add_argument('-o', '--outfile', type=str, nargs=1, help='output file')
 args = parser.parse_args()
 files = args.files
 
@@ -66,6 +67,13 @@ iCells = np.logical_and(np.logical_and(lats>=args.latmin,
                                        lats<=args.latmax),
                         np.logical_and(lons>=args.lonmin,
                                        lons<=args.lonmax))
+
+# Chop out some of U.S. land 
+iCells = np.logical_and(iCells,
+                        np.logical_or(lats<32,lons>-83))
+
+#Is there a way to ignore points >100km from ocean?
+
 nCells = np.sum(iCells) # Don't count False values by using len()
 lats = lats[iCells]
 lons = lons[iCells]
@@ -76,7 +84,7 @@ if len(files) == 0:
 
 
 f22 = open("fort.22", "w")
-f22header = "! "+datetime.datetime.now().strftime("%c")+" initfile="+os.path.realpath(args.initfile)
+f22header = "! "+datetime.datetime.now().strftime("%c")+" initfile_with_lat_lon="+os.path.realpath(args.initfile)
 f22header += " latmin,latmax,lonmin,lonmax="+"%8.3f,%8.3f,%9.3f,%9.3f"%(args.latmin,args.latmax,args.lonmin,args.lonmax)+" nCells="+'%d\n' % nCells
 if len(f22header) > 1024:
     print "fort.22 header line over 1024 characters"
@@ -91,6 +99,8 @@ ramp_mult = 1.
 
 for file in files:
     ofile = os.path.splitext(file)[0] + ".nws16"
+    if args.outfile:
+        ofile = args.outfile
  
     if not args.force and os.path.exists(ofile):
         print ofile,"exists already"
