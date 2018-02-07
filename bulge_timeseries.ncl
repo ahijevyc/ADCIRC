@@ -14,7 +14,7 @@ begin
         modelstr = "control"
     end if
     if(.not.isvar("stormname"))then
-        stormname = "IKE"
+        stormname = "IRMA"
     end if
     if(.not.isvar("stride"))then
         stride=2
@@ -22,7 +22,7 @@ begin
             stride=10
         end if
     end if
-    idir   = "/glade/scratch/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/" 
+    idir   = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/" 
     workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
 
     ; If True, plot only one frame (default False)
@@ -140,8 +140,7 @@ begin
     areaCell      := f->areaCell
 
     date_str1 = date_str(f->time)
-
-
+    print("first adcirc time: "+date_str1(0))
 
     trackfile = idir+"fort.22"
     ; fort.22 is quite different for the NOS_OWI run. it don't have lat/lon of track.
@@ -152,6 +151,7 @@ begin
     adeck_valid = adeck@valid   
     adeck_valid@units = adeck@timeunits
     tracktime = cd_convert(adeck_valid, f->time@units)
+    print("first fort.22 tracktime: "+date_str(tracktime(0)))
     trackheading := adeck@heading
     trackI := sin(trackheading/180.*3.141592)
     trackJ := cos(trackheading/180.*3.141592)
