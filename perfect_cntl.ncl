@@ -19,6 +19,10 @@ begin
     if(.not.isdefined("zoom")) then
         zoom = 1
     end if
+    ; region
+    if(.not.isdefined("region")) then
+        region = ""
+    end if
     if(.not.isvar("minus_astronomical_tide"))then
         minus_astronomical_tide = False
     end if
@@ -37,7 +41,7 @@ begin
     end if
 
     outdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
-    outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+".perfectmodel.zoom"+zoom+"."+dryland
+    outfile = outdir+modelstr+region+".minus_astronomical_tide"+minus_astronomical_tide+".perfectmodel.zoom"+zoom+"."+dryland
 
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -52,13 +56,22 @@ begin
     print("opening "+modeldir+"maxele.63.nc")
     f = addfile(modeldir+"maxele.63.nc","r")
 
-    k = ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
-
-    obs_file   = "/tmp/"+stormname+  ".control"+".zoom"+zoom+".nc" ; temporary mesh zoomed to lat/lon bounds
-    model_file = "/tmp/"+stormname+"."+modelstr+".zoom"+zoom+".nc" ; used later in script
+    iregion = get_iregion(f, region)
+    k = ind(iregion .and. f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
+    
+    tmpdir = "/glade/scratch/"+getenv("USER")+"/"
+    obs_file   = tmpdir + stormname+  ".control"+".zoom"+zoom+".nc" ; temporary mesh zoomed to lat/lon bounds
+    model_file = tmpdir + stormname+"."+modelstr+".zoom"+zoom+".nc" ; used later in script
     files = (/ obs_file, model_file /)
     full_files = (/ obsdir, modeldir /) + "maxele.63.nc"
 
+    if(any(ismissing(k)))then
+        print("no nodes in zoom domain and/or region?")
+        printMinMax(f->x,False)
+        printMinMax(f->y,False)
+        print(res)
+        exit
+    end if
     ; sfc_sub_state was defined in get_MHHW.ncl
     sfc_sub_state := sfc_sub_state(k)
     hgt_MHHW := hgt_MHHW(k)
