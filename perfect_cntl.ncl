@@ -12,6 +12,7 @@ begin
     if(.not.isvar("stormname"))then
         stormname = "IRMA"
     end if
+    stride = 1
     basedir = "/glade/p/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
     obsdir   = basedir + stormname+"/control/"
@@ -41,7 +42,6 @@ begin
     end if
 
     outdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
-    outfile = outdir+modelstr+region+".minus_astronomical_tide"+minus_astronomical_tide+".perfectmodel.zoom"+zoom+"."+dryland
 
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -53,9 +53,13 @@ begin
     ; Assign domain min/max lat/lon attributes to res.
     res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
 
-    print("opening "+modeldir+"maxele.63.nc")
-    f = addfile(modeldir+"maxele.63.nc","r")
+    f63 = modeldir+"maxele.63.nc"
+    print("opening "+f63)
+    f = addfile(f63,"r")
 
+    domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
+                   sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF) + region
+    outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + "."+sprintf("stride%02.0f.",stride)+domainString+".perfectmodel"
     iregion = get_iregion(f, region)
     k = ind(iregion .and. f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
     
@@ -139,7 +143,6 @@ begin
     areaCell  := f->areaCell
 
     gsn_define_colormap(wks,"WhiteBlueGreenYellowRed")
-    res@cnLinesOn                = False
     res@cnLevelSelectionMode     = "ManualLevels"
     res@cnMinLevelValF           =  1e-11
     res@cnMaxLevelValF           =  5.
@@ -152,6 +155,7 @@ begin
 
 
     res@cnFillOn                 = True
+    res@cnLinesOn                = False
     res@cnFillMode               = "RasterFill"
     res@cnLineLabelsOn           = True
     res@cnLineLabelPlacementMode = "Constant"
@@ -301,4 +305,3 @@ begin
     print("finished "+outfile)
     
 end
-
