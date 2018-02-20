@@ -22,8 +22,8 @@ begin
             stride=10
         end if
     end if
-    idir   = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/" 
-    workdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
+    basedir = "/glade/p/work/ahijevyc/ADCIRC/"
+    modeldir = basedir + stormname+"/"+modelstr+"/"
 
     ; If True, plot only one frame (default False)
     if(.not.isdefined("one_frame")) then
@@ -33,6 +33,10 @@ begin
     ; zoom level
     if(.not.isdefined("zoom")) then
         zoom = 1
+    end if
+    ; region
+    if(.not.isdefined("region")) then
+        region = ""
     end if
     if(.not.isvar("minus_astronomical_tide"))then
         minus_astronomical_tide = False
@@ -52,7 +56,6 @@ begin
     end if
 
     outdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
-    outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland
 
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -67,19 +70,19 @@ begin
     left_percentile   = 2.5
     right_percentile = 97.5
 
-    f63 = idir+"fort.63.nc"
+    f63 = modeldir+"fort.63.nc"
     print("opening "+f63)
     f = addfile(f63,"r")
 
-    LabelFontHeightF    =   0.0
     domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
-                   sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF)
-
-    k = ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
+                   sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF) + region
+    outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + "."+sprintf("stride%02.0f.",stride)+domainString
+    iregion = get_iregion(f, region)
+    k = ind(iregion .and. f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
     ; Take every stride-th node (to speed things up).
     k := k(::stride)
     if(any(ismissing(k)))then
-        print("no nodes in zoom domain?")
+        print("no nodes in zoom domain and/or region?")
         printMinMax(f->x,False)
         printMinMax(f->y,False)
         print(res)
@@ -87,7 +90,7 @@ begin
     end if
  
     ; Extract slice of nodes for smaller file
-    model_file = workdir+"fort.63."+sprintf("stride%02.0f.",stride)+domainString
+    model_file = modeldir+"fort.63."+sprintf("stride%02.0f.",stride)+domainString
     if(.not.isfilepresent(model_file+".nc")) then
         g = addfile(model_file+".nc","c")
         ; Thin zeta, depth, x, y, and areaCell.
@@ -110,13 +113,13 @@ begin
     f = addfile(model_file+".nc","r")
     print("png file will be "+outfile)
     wks = gsn_open_wks("png",outfile)
-    timeseries_file = outfile + "."+sprintf("stride%02.0f.",stride)+domainString+".timeseries.nc"
+    timeseries_file = outfile + ".timeseries.nc"
     zeta := f->zeta ; read water height from processed (smaller) file
     depth := f->depth
     if(minus_astronomical_tide)then
         ; Subtract water level from run with no storm. Just astronomical tide.
         ; This will give storm surge (the change in water level due to storm).
-        a = addfile(idir+"../coldstart_extend/fort.63.nc","r")
+        a = addfile(modeldir+"../coldstart_extend/fort.63.nc","r")
         surface_height = reshape(-a->depth,dimsizes(a->zeta))
         ; Change missing values in astronomical tide run to surface height (-depth).
         ; now zeta is height of water or land (whichever is higher).
@@ -142,7 +145,7 @@ begin
     date_str1 = date_str(f->time)
     print("first adcirc time: "+date_str1(0))
 
-    trackfile = idir+"fort.22"
+    trackfile = modeldir+"fort.22"
     ; fort.22 is quite different for the NOS_OWI run. it don't have lat/lon of track.
     print("reading "+trackfile)
     adeck := read_atcf(trackfile)
@@ -199,7 +202,7 @@ begin
     sres@tiYAxisFontHeightF     =  0.013
     sres@xyLineThicknessF       =  3.
     sres@gsnYRefLine            =  0.0
-    sres@tmXBLabelFontHeightF   =  0.015
+    sres@tmXBLabelFontHeightF   =  0.012
     sres@xyLabelMode            = "Custom"
     sres@xyLineLabelFontHeightF =  0.008
     sres@vpXF                   =  0.2
@@ -215,7 +218,7 @@ begin
     mres@gsMarkerSizeF        = 0.01
 
     resTick                = True
-    resTick@ttmFormat      = "%d %c"
+    resTick@ttmFormat      = "%hZ %c %d"
     resTick@ttmAxis        = "XB"
     resTick@ttmMajorStride = 48
     resTick@ttmMinorStride = 12
@@ -246,6 +249,7 @@ begin
         globalAtts@minus_astronomical_tide =  minus_astronomical_tide
         globalAtts@stride = stride
         globalAtts@zoom = zoom
+        globalAtts@region = region
         fileattdef(g, globalAtts)
         inundation_volume = new(ntime,double,-999.); need short number for titles (default is minus 1 zillion billion)
         inundation_volume@long_name = "inundation volume in inundation zone"
@@ -310,11 +314,11 @@ begin
     txres@txJust        = "BottomLeft"
 
     ; Dot nodes 
-    ssres                  = True
-    ssres@gsMarkerColor    = "pink"
-    ssres@gsMarkerIndex    = 1
-    ssres@gsMarkerSizeF    = 0.005
-    ssres@gsMarkerOpacityF = 0.9
+    noderes                  = True
+    noderes@gsMarkerColor    = "pink"
+    noderes@gsMarkerIndex    = 1
+    noderes@gsMarkerSizeF    = 0.005
+    noderes@gsMarkerOpacityF = 0.9
 
     ; Draw LS contours (left and right sides)
     LSres = True
@@ -441,7 +445,7 @@ begin
         bi := ind((depth.le.0.or.sfc_sub_state.eq.1).and.hgt_MHHW.lt.0)
         if(.not.any(ismissing(bi)))then
             ; Draw pink dots
-            ; dots := gsn_add_polymarker(wks,map,res@sfXArray(bi),res@sfYArray(bi),ssres)
+            ; dots := gsn_add_polymarker(wks,map,res@sfXArray(bi),res@sfYArray(bi),noderes)
         end if
 
         ; .gt.0. used to be .ge.0, but we don't want dry land nodes
@@ -456,17 +460,18 @@ begin
             g->inundation_true(itime,bi) = 1b
         end if
 
-        ; tried to use gsnLeftString resource but it wouldn't update the resource on the map object after I created map.
+        ; Tried gsnLeftString resource but it wouldn't update the resource on the map object after I created map.
         desc = sprintf("inundation zone defined by %.0f",right_percentile-left_percentile)+"% of volume (" +sprintf("%.1f",left_percentile)+"% to the left and "+sprintf("%.1f",100.-right_percentile)+"% to the right) where depth >= "+thresh_string
         desc = desc +"~C~inundation zone volume " + sprintf(":%6.2f", inundation_volume(itime)) + inundation_volume@units + "   length:" + sprintf("%4.0fkm",right_length_km-left_length_km) + "   average depth: " + sprintf("%.1fm",g->average_depth(itime)) + "    area: "+ sprintf("%.0f km~S~2~N~",g->inundation_area(itime)) + "~C~normally-dry land datum=" + dryland
+
         ; Inundated nodes in control run.
         ; If you get error about file (c) isn't defined, just run again.
         icontrol := ind(c->inundation_true(maxind(c->inundation_volume),:).eq.1)
         if(.not.any(ismissing(icontrol)))then
             volume_in_ctrl(itime) = sum(volume(icontrol))
-            if(False)then
+            if(one_frame)then
                 ; Draw pink dots
-                dots := gsn_add_polymarker(wks,map,res@sfXArray(icontrol),res@sfYArray(icontrol),ssres)
+                dots := gsn_add_polymarker(wks,map,res@sfXArray(icontrol),res@sfYArray(icontrol),noderes)
                 desc = desc + "~C~inundation zone volume intersecting inundation zone of control run (pink): " + sprintf("%6.2fkm~S~3~N~",volume_in_ctrl(itime))
             end if
         end if
