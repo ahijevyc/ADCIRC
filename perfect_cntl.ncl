@@ -1,6 +1,6 @@
 load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
-load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl"
+load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
 
 ; Compare maximum inundation heights in control and perturbed runs.
 
@@ -140,7 +140,7 @@ begin
     inundation = f->inundation
     zeta_max   = f->zeta_max
     depth      = f->depth
-    areaCell  := f->areaCell
+    ;areaCell  := f->areaCell
 
     gsn_define_colormap(wks,"WhiteBlueGreenYellowRed")
     res@cnLevelSelectionMode     = "ManualLevels"
