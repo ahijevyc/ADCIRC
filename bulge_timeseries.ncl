@@ -368,8 +368,12 @@ begin
         trackJ0   = (1 - frac) * trackJ(tracki-1)   + frac * trackJ(tracki) + tracklat0
         trackI0   = (1 - frac) * trackI(tracki-1)   + frac * trackI(tracki) + tracklon0
         dist := gc_latlon(res@sfYArray,res@sfXArray,conform(res@sfYArray,tracklat0,-1),conform(res@sfXArray,tracklon0,-1),2,-4)
-        if(tracklon0.lt.res@mpMinLonF.or.tracklon0.gt.res@mpMaxLonF.or.tracklat0.lt.res@mpMinLatF.or.tracklat0.gt.res@mpMaxLatF)then
-            print("storm outside domain. skipping.")
+        expand_plots_deg = 2. ; expand plot-worthy locations by expand_plots_deg (except for south boundary)
+        if(tracklon0 .lt. (res@mpMinLonF-expand_plots_deg) .or. \
+           tracklon0 .gt. (res@mpMaxLonF+expand_plots_deg) .or. \
+           tracklat0 .lt.  res@mpMinLatF         .or. \
+           tracklat0 .gt. (res@mpMaxLatF+expand_plots_deg) )then
+            print(sprintf("%6.1fE,", tracklon0) + sprintf("%5.1fN", tracklat0)+" storm outside domain. skipping.")
             continue
         end if
         lat :=  transpose( (/ onedtond(tracklat0,dimsizes(res@sfYArray)), onedtond(trackJ0,dimsizes(res@sfYArray)), res@sfYArray /) )
