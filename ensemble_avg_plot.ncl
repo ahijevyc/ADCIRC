@@ -1,180 +1,201 @@
 load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
+load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
+load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
 
-begin	
-	; forked from simple_plot.ncl Nov 13 2015
+    ; forked from simple_plot.ncl Nov 13 2015
+    ; Updated and adapted for hwt2017 ensemble Feb 2018
 
-	; Run first with type="avg"
 
-	type = "avg"
-	;type = "stddev"
-	;type = "zscore"
-	if(type.eq."avg")then
-		type_str = "Mean"
-	end if
-	if(type.eq."rmssdn")then
-		type_str = "Root of mean square (for mean divide by n-1)"
-	end if
-	if(type.eq."zscore")then
-		type_str = "Standard Deviation divided by Mean"
-	end if
-	if(type.eq."stddev")then
-		type_str = "Standard Deviation"
-	end if
-	type_str = type_str + " of veer ensemble"
-	idir = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/control/" ; "coldstart_extend" and ADCIRC control RUN
-	workdir = "/glade/p/work/ahijevyc/ADCIRC/control/"
-	notide = False
-	; zoom level
-	if(.not.isdefined("zoom"))then
-		zoom = 1 
-	end if
+begin
+    ; Run first with type="avg"
+    if(.not.isvar("type"))then
+        type = "avg"
+    end if
+    if(.not.isvar("modelstr"))then
+        modelstr = "hwt2017"
+    end if
+    if(.not.isvar("stormname"))then
+        stormname = "IRMA"
+    end if
+    stride = 1
+    basedir = "/glade/scratch/ahijevyc/"+modelstr+"/2017090700/" 
+    outdir  = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
+    ; zoom level
+    if(.not.isdefined("zoom")) then
+        zoom = 1
+    end if
+    ; region
+    if(.not.isdefined("region")) then
+        region = ""
+    end if
+    if(.not.isvar("minus_astronomical_tide"))then
+        minus_astronomical_tide = False
+    end if
+    if(.not.isvar("thresh"))then
+        thresh = 0.0 ; inundation threshold
+    end if
+    thresh_string = sprintf("%4.2fm", thresh)
+    if(.not.isvar("dryland"))then
+        ; Baseline for normally-dry land LMSL>=0 or MHHW>=0
+        dryland= "MHHW" ; or "LMSL" 
+    end if
+    ; Sanity check for misspelled dryland
+    if(.not.any(dryland.eq.(/"MHHW","LMSL"/)))then
+        print("Unexpected dryland: "+dryland)
+        print("Expected MHHW or LMSL")
+        exit
+    end if
 
-	res = True
-	res = set_res_mp(res,"zoom"+sprintf("%.0f",zoom))
+    res = True
+    ; Assign domain min/max lat/lon attributes to res.
+    res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
 
-	print("opening "+idir+"maxele.63.nc")
-	f = addfile(idir+"maxele.63.nc","r")
+    members = systemfunc("ls "+basedir+"ens_*/latlon_0.125deg_000km/maxele.63.nc")
+    ensemble =  addfiles(members, "r")
+    ListSetType(ensemble, "join")
+    f = ensemble[0]
 
-	; hack to plot standard deviation of max water height across control and veer runs.
-	infile = workdir+"notideFalse_"+type+".maxele.63.nc"
-	if (fileexists(infile)) then
-		print("using old "+infile)
-	else
-		members = "/glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/"+(/"control","veer*"/)+"/maxele.63.nc"
-		; make average file.
-		avg_file = workdir+"notideFalse_avg.maxele.63.nc"
-		stddev_file = workdir+"notideFalse_stddev.maxele.63.nc"
-		system("ncea -O -y avg "+members+" "+avg_file)
-		if(type.eq."stddev")then
-			system("cp "+avg_file+" "+infile)
-			system("ncecat -O -v zeta_max "+members+" out.nc")
-			system("ncbo -O -y subtract -v zeta_max out.nc "+avg_file+" out.nc")
-			system("ncwa -O -a record -y rmssdn out.nc out.nc")
-			system("ncks -A out.nc "+infile)
-		end if
-		if(type.eq."zscore")then
-			print("Creating zscore file. See NCL script for commands.")
-			system("cp  "+avg_file+" "+infile) ; copy all variables to zscore file, work on zeta_max later
-			system("ncecat -O "+avg_file+" out.nc");  Wrap out.nc in degenerate "record" dimension
-			system("ncwa -O -a record -B 'zeta_max >= 0.01' out.nc out.nc")
-			system("ncbo -O -y divide -v zeta_max "+stddev_file+" "+avg_file+" out.nc")
-			system("ncks -A out.nc "+infile)
-		end if
-	end if
-	f = addfile(infile,"r")
+    domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
+                   sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF) + region
+    outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + "."+sprintf("stride%02.0f.",stride)+domainString+"."+type
+    iregion = get_iregion(f, region)
+    k = ind(iregion .and. f->x .ge.res@mpMinLonF .and. f->x .le.res@mpMaxLonF\
+                    .and. f->y .ge.res@mpMinLatF .and. f->y .le.res@mpMaxLatF)
 
-	if(notide)then
-		print("not setup for notide")
-		exit
-	end if
+    zeta_max   = ensemble[:]->zeta_max
+    depth      = ensemble[:]->depth
 
-	k = ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
+    inundation = zeta_max + depth
+    ; Set missing values to zero. Don't use num() to count non-missing values (zero is not missing but is not True either).
+    inundation = where(ismissing(inundation),0.,inundation)
 
-	sm = ".temporarysmallgrid"
-	system("rm -v "+sm+".nc") 
-	g = addfile(sm+".nc","c")
-	g->zeta_max = f->zeta_max(k)
-	g->depth = f->depth(k)
-	g->x = f->x(k)
-	g->y = f->y(k)
-	; get area asssociated with each node (file created by Michael Duda)
-	a = addfile("/glade/p/work/ahijevyc/ADCIRC/duda/NOS_cells.nc","r")
-	g->areaCell = a->areaCell(k)
-	delete(g)
-	delete(k)
-	delete(a)
-	f = addfile(sm+".nc","r")
-	wks = gsn_open_wks("png",workdir+type+"_notide"+notide+".zoom"+zoom)
-	nnodes = dimsizes(f->zeta_max) ; number of nodes
-	stride = tointeger(max( (/ 1., nnodes^0.4/100 /) ))
-	zeta_max = f->zeta_max(::stride)
-	depth  = f->depth(::stride)
+    res@cnLevelSelectionMode     = "ManualLevels"
+    res@cnMinLevelValF           =  1e-9 
+    res@cnMaxLevelValF           =  2.
+    res@cnLevelSpacingF          =  0.25
+    if(type.eq."avg")then
+        x_inundation = dim_avg_n_Wrap(inundation, 0)
+    end if
+    if(type.eq."max")then
+        x_inundation = dim_max_n_Wrap(inundation, 0)
+    end if
+    if(type.eq."total")then
+        break_thresh = where(inundation.ge.thresh,1,0)
+        wgt = new(dimsizes(members), "float")
+        wgt = 1.
+        x_inundation = dim_sum_wgt_n_Wrap(break_thresh, wgt, 0, 0)
+        x_inundation@units     = "count"
+        res@cnMinLevelValF           =  0.
+        res@cnMaxLevelValF           =  10.
+        res@cnLevelSpacingF          =  1.
+    end if
+    if(type.eq."min")then
+        x_inundation = dim_min_n_Wrap(inundation, 0)
+    end if
+    printMinMax(x_inundation,False)
 
-	Re = 6371.; radius of Earth in km
-	areaCell := f->areaCell(::stride) * Re^2.
+    ; Only retain land values and low-lying land nodes below MSL (sfc_sub_state=1, or "startDry" nodes). 
+    x_inundation = mask(x_inundation, f->depth.le.0 .or. (sfc_sub_state.eq.1), True)
+    x_inundation = mask(x_inundation, x_inundation.ge.thresh, True)
+    x_inundation@long_name = "Ensemble " + type + " maximum inundation >="+thresh_string
+    if(.not.isatt(x_inundation,"units"))then
+        x_inundation@units     = zeta_max@units
+    end if
 
-	gsn_define_colormap(wks,"WhiteBlueGreenYellowRed")
-	res@cnLevelSelectionMode     = "ManualLevels"
-	res@cnMinLevelValF           =  0. 
-	res@cnMaxLevelValF           =  5.
-	res@cnLevelSpacingF          =  0.5
-	if(type.eq."stddev")then
-		res@cnMaxLevelValF           =  2.6
-		res@cnLevelSpacingF          =  0.2
-	end if
-	if(type.eq."zscore")then
-		res@cnMaxLevelValF           =  2.6
-		res@cnLevelSpacingF          =  0.2
-	end if
-		
+    if(dryland.eq."MHHW")then
+        print(num(.not.ismissing(x_inundation))+" inundated nodes before masking nodes below MHHW=0")
+        ; Preserve nodes with missing MHHW (where Vdatum couldn't convert, like over land or deep into Gulf)
+        ; or MHHW >= 0 (above normally dry land).
+        x_inundation         = mask(x_inundation, ismissing(hgt_MHHW).or.hgt_MHHW.ge.0, True)
+        print(num(.not.ismissing(x_inundation))+" inundated nodes after masking nodes below MHHW=0")
+    end if
 
-	res@sfFirstNodeIndex         = 1
-	res@sfXArray                 = f->x(::stride)
-	res@sfYArray                 = f->y(::stride)
-	inundation                   = mask(zeta_max + depth, depth.le.0, True)
-	res@sfDataArray              = inundation
 
-	res@cnFillOn                 = True
-	res@cnFillMode               = "RasterFill"
-	res@cnLinesOn                = False
-	res@lbTitleString            = "maximum inundation (meters)"
-	res@lbTitleFontHeightF       = 0.018
-	res@lbTitlePosition          = "Bottom"
-	res@gsnLeftString            = type_str
+    wtype    = "png"
+    wtype@wkWidth  = 2048 
+    wtype@wkHeight = 2048 
+    wks = gsn_open_wks(wtype,outfile)
+    gsn_define_colormap(wks,"WhiteBlueGreenYellowRed")
 
-	; Don't advance the frame.
-	res@gsnFrame = False
+        
+    res@sfXArray                 = f->x
+    res@sfYArray                 = f->y
+    res@sfDataArray              = x_inundation
 
-	res@mpDataBaseVersion       = "HighRes"     ; "MediumRes" will run faster.
-	res@mpLimitMode             = "LatLon"
-	res@mpPerimOn               = False
-	res@pmTickMarkDisplayMode   = "Always"    ; Turn on map tickmarks.
-	lres                        = True
-	lres@gsLineThicknessF       =  2.
-	lres@gsLineLabelFontHeightF = 0.009
 
-	map := gsn_csm_contour_map(wks,zeta_max,res)
-	txres = True
-	txres@txFontHeightF = 0.01
-	txres@txJust        = "BottomLeft"
-	gsn_text_ndc(wks, "domain "+tostring(zoom)+" every "+tostring(stride)+" nodes~C~"+systemfunc("date"),0.01,0.01,txres)
-	; Draw a dot on each node.
-	mkres                   = True
-	mkres@gsMarkerIndex     = 1
-	mkres@gsMarkerSizeF     = 0.0005
-	mkres@gsMarkerOpacityF  = 0.007
-	gsn_polymarker(wks,map,res@sfXArray,res@sfYArray,mkres)
+    res@cnFillOn                 = True
+    res@cnLinesOn                = False
+    res@cnFillMode               = "RasterFill"
+    res@lbTitleString            = x_inundation@long_name
+    res@lbTitleFontHeightF       = 0.018
+    res@lbTitlePosition          = "Bottom"
 
-	; draw tracks for all veers
-	trackfiles = systemfunc("ls "+idir+"fort.22  /glade/scratch/fossell/ADCIRC/IKE_RUN/nos_grid/v51_additive_perts/*/fort.22 ")
-	do iveer=0,dimsizes(trackfiles)-1  
-		trackfile = trackfiles(iveer)
-		modelstr = systemfunc("basename " + systemfunc("dirname "+trackfile))
-		; NOS is not "tracked". It is forced by U,V, grids. Don't plot the "track" for NOS. THere is none.
-		if(modelstr.eq."NOS_OWI")then ; fort.22 is quite different for the NOS run. it don't have lat/lon of track.
-			continue
-		end if
-		if(fileexists(trackfile))then
-			print("reading "+trackfile)
-			lines := asciiread(trackfile,-1,"string")
-			delim = ","
-			tracklon := -1 * tofloat(str_get_field(lines, 8, delim))/10.
-			tracklat := tofloat(str_get_field(lines, 7, delim))/10.
-			tt     := str_get_field(lines, 3, delim)
-			year   := tointeger(str_get_cols(tt, 1, 4))
-			month  := tointeger(str_get_cols(tt, 5, 6))
-			day    := tointeger(str_get_cols(tt, 7, 8))
-			hour   := tointeger(str_get_cols(tt, 9,10))
-			minute := hour
-			minute = 0
-			second := hour
-			second = 0
-			lres@gsLineLabelString = modelstr
-			gsn_polyline(wks,map,tracklon,tracklat,lres)
-		end if
-        end do
-	
+    ; Don't advance the frame.
+    res@gsnFrame = False
 
-	frame(wks)
+    res@mpDataBaseVersion       = "HighRes"     ; "MediumRes" will run faster.
+    res@mpLimitMode             = "LatLon"
+    res@mpPerimOn               = False
+    res@pmTickMarkDisplayMode   = "Always"    ; Turn on map tickmarks.
+    lres                        = True
+    lres@gsLineThicknessF       =  2.
+    lres@gsLineLabelFontHeightF = 0.009
+
+    map := gsn_csm_contour_map(wks,x_inundation,res)
+
+    ; draw tracks for all veers
+    trackfiles = systemfunc("ls "+basedir+"ens_*/latlon_0.500deg_025km/gfdl_tracker/tracker/IrmaTrack.atcf"  )
+    do iveer=0,dimsizes(trackfiles)-1  
+        trackfile = trackfiles(iveer)
+        iens = str_index_of_substr(trackfile,"/ens_",1)
+        modelstr = str_get_cols(trackfile,iens+1,iens+6)
+        modelstr = str_sub_str(modelstr,"/","") ; Remove slashes
+        if(fileexists(trackfile))then
+            print("reading "+trackfile)
+            adeck := read_atcf(trackfile)
+            tracklon := adeck@lon
+            tracklat := adeck@lat
+            lres@gsLineLabelString = modelstr
+            gsn_polyline(wks,map,tracklon,tracklat,lres)
+        end if
+    end do
+    
+    txres = True
+    txres@txFontHeightF = 0.015
+    txres@txJust        = "BottomLeft"
+    gsn_text_ndc(wks, "domain "+tostring(zoom)+"~C~"+systemfunc("date"),0.01,0.01,txres)
+
+    frame(wks)
+    print("made "+outfile+"."+wtype)
+
+    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    ; Get standard deviation of inundation across ensemble.
+    if(False)then
+        infile = outdir+"ens_"+type+".maxele.63.nc"
+        if (fileexists(infile)) then
+            print("using old "+infile)
+        else
+            members = basedir+"ens_*/latlon_0.125deg_000km/maxele.63.nc"
+            ; make average file.
+            avg_file    = outdir   +"ens_avg.maxele.63.nc"
+            stddev_file = outdir+"ens_stddev.maxele.63.nc"
+            system("ncea -O -y avg "+members+" "+avg_file)
+            if(type.eq."stddev")then
+                system("cp "+avg_file+" "+infile)
+                system("ncecat -O -v zeta_max "+members+" out.nc")
+                system("ncbo -O -y subtract -v zeta_max out.nc "+avg_file+" out.nc")
+                system("ncwa -O -a record -y rmssdn out.nc out.nc")
+                system("ncks -A out.nc "+infile)
+            end if
+            if(type.eq."zscore")then
+                print("Creating zscore file. See NCL script for commands.")
+                system("cp  "+avg_file+" "+infile) ; copy all variables to zscore file, work on zeta_max later
+                system("ncecat -O "+avg_file+" out.nc");  Wrap out.nc in degenerate "record" dimension
+                system("ncwa -O -a record -B 'zeta_max >= 0.01' out.nc out.nc")
+                system("ncbo -O -y divide -v zeta_max "+stddev_file+" "+avg_file+" out.nc")
+                system("ncks -A out.nc "+infile)
+            end if
+        end if
+    end if
 end
 
