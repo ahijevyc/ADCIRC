@@ -73,6 +73,9 @@ begin
     f63 = modeldir+"fort.63.nc"
     print("opening "+f63)
     f = addfile(f63,"r")
+    ; Allow for >4GB file.
+    ; Must call before creating file. 
+    setfileoption("nc","Format","NetCDF4Classic") 
 
     domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
                    sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF) + region
@@ -112,23 +115,31 @@ begin
     print("reading smaller processed file "+model_file+".nc")
     f = addfile(model_file+".nc","r")
     print("png file will be "+outfile)
-    wks = gsn_open_wks("png",outfile)
+    wks_type = "png"
+    wks_type@wkWidth = 1200
+    wks_type@wkHeight = 1200
+    wks = gsn_open_wks(wks_type,outfile)
     timeseries_file = outfile + ".timeseries.nc"
     zeta := f->zeta ; read water height from processed (smaller) file
     depth := f->depth
     if(minus_astronomical_tide)then
-        ; Subtract water level from run with no storm. Just astronomical tide.
+        ; Subtract water level with no storm. Just astronomical tide.
         ; This will give storm surge (the change in water level due to storm).
-        a = addfile(modeldir+"../coldstart_extend/fort.63.nc","r")
+        coldstart_k = modeldir + "../coldstart_extend/" + systemfunc("basename "+model_file) + ".nc"
+        a = addfile(coldstart_k, "r")
+        if(.not.isfilepresent(coldstart_k)) then
+            print("Did not find "+coldstart_k)
+            print("Trim coldstart domain with modelstr='coldstart_extend' first.")
+            exit
+        end if 
         surface_height = reshape(-a->depth,dimsizes(a->zeta))
         ; Change missing values in astronomical tide run to surface height (-depth).
         ; now zeta is height of water or land (whichever is higher).
         zeta_nostorm = where(ismissing(a->zeta), surface_height, a->zeta)
         ; Change missing values in storm run to surface height (-depth).
-        zeta = where(ismissing(zeta),surface_height(:,k),zeta)
+        zeta = where(ismissing(zeta),surface_height,zeta)
         print("subtracting astronomical tide from storm tide")
-        ; Use "k" subscripts to get small slice of zeta_nostorm that matches size and shape of zeta.
-        zeta = zeta - zeta_nostorm(:,k)
+        zeta = zeta - zeta_nostorm
         zeta@minus_astronomical_tide = minus_astronomical_tide
         zeta@long_name = "storm surge (storm tide minus astronomical tide)"
         print("subtracted astronomical tide")
@@ -136,6 +147,27 @@ begin
 
     printVarSummary(zeta)
     printMinMax(zeta,False)
+    if(min(zeta).le.-12.or.max(zeta).gt.12.)then
+        print("zeta out of whack.  Stopping")
+        iwhack = ind_resolve(maxind(ndtooned(zeta)),dimsizes(zeta))
+        print(iwhack)
+        print(f->x(iwhack(0,1)))
+        print(f->y(iwhack(0,1)))
+        iwhack = ind_resolve(minind(ndtooned(zeta_nostorm)),dimsizes(zeta_nostorm))
+        print(iwhack)
+        print(a->x(iwhack(0,1)))
+        print(a->y(iwhack(0,1)))
+        junk := zeta_nostorm(iwhack(0,0),:)
+        res@sfDataArray    := junk
+        res@sfXArray                 = a->x
+        res@sfYArray                 = a->y
+        res@cnFillMode               = "RasterFill"
+        res@cnFillOn                 = True
+        res@cnLinesOn                = False
+        map := gsn_csm_contour_map(wks,junk,res)
+        exit
+    end if
+
     ntime = dimsizes(zeta&time)
     nnodes = dimsizes(depth)
     sfc_sub_state := f->sfc_sub_state
@@ -177,7 +209,6 @@ begin
     res@vpYF                     =  0.57
     res@vpHeightF                =  0.41
 
-    res@sfFirstNodeIndex         = 1
     res@sfXArray                 = f->x
     res@sfYArray                 = f->y
     res@cnFillOn                 = True
@@ -225,23 +256,36 @@ begin
     time_axis_labels(f->time, sres, resTick)
  
     control_timeseries_file := str_sub_str(timeseries_file,modelstr,"control")
-    print("control_timeseries_file="+control_timeseries_file)
-    if(.not.fileexists(control_timeseries_file).and.modelstr.ne."control")then
-        print("didn't find "+control_timeseries_file)
-        print("control timeseries file doesn't exist yet. make it.")
+   
+    ; If you are analyzing something other than control,
+    ; the control time series file should exist already.
+    if(modelstr.ne."control")then
+        if(fileexists(control_timeseries_file))then
+            c = addfile(control_timeseries_file,"r")
+        else
+            print("didn't find "+control_timeseries_file+". Run with modelstr = control first.")
+            exit
+        end if
+    else
+        print("Time series and inundation nodes for control will be defined now.")
     end if
-    c := addfile(control_timeseries_file,"r")
+    print("control_timeseries_file="+control_timeseries_file)
 
     ; If timeseries file doesn't exist, create it and initialize variables. Otherwise preserve them.
     if(isfilepresent(timeseries_file))then
+        print("Opening existing timeseries_file "+timeseries_file)
         g = addfile(timeseries_file,"w")
+        if(ismissing(g))then
+            print("couldn't open for writing")
+        end if
         inundation_volume = g->inundation_volume
-        inundation_true = g->inundation_true
-        length_scale    = g->length_scale; read previously written array
-        volume_in_ctrl  = g->volume_in_ctrl ; 
-        average_depth   = g->average_depth
-        inundation_area = g->inundation_area
+        inundation_true   = g->inundation_true
+        length_scale      = g->length_scale; read previously written array
+        volume_in_ctrl    = g->volume_in_ctrl ; 
+        average_depth     = g->average_depth
+        inundation_area   = g->inundation_area
     else
+        print("Creating new timeseries_file "+timeseries_file)
         g = addfile(timeseries_file,"c")
         ; Put res variable in global attributes so we have lat/lon min/max
         globalAtts = True
@@ -251,7 +295,7 @@ begin
         globalAtts@zoom = zoom
         globalAtts@region = region
         fileattdef(g, globalAtts)
-        inundation_volume = new(ntime,double,-999.); need short number for titles (default is minus 1 zillion billion)
+        inundation_volume = new(ntime,double); ,-999.); Used to need short number for titles (default is minus 1 zillion billion)
         inundation_volume@long_name = "inundation volume in inundation zone"
         inundation_volume@units = "km~S~3~N~"
         inundation_volume@stride = stride
@@ -266,20 +310,22 @@ begin
         copy_VarMeta(inundation_volume, average_depth)
         average_depth@long_name = "average depth in inundation zone"
         average_depth@units = "m"
-        average_depth@stride = stride
         g->average_depth=average_depth
 
         inundation_area = new(dimsizes(inundation_volume),typeof(inundation_volume))
         copy_VarMeta(inundation_volume, inundation_area)
         inundation_area@long_name = "area of inundation zone"
         inundation_area@units = "km~S~2~N~"
-        inundation_area@stride = stride
         g->inundation_area=inundation_area
 
         inundation_true = new((/ntime,nnodes/),byte)
-        copy_VarAtts(inundation_volume, inundation_true)
+        ; Avoid warning about assigning out-of-range fillvalue to byte.
+        ; Hold inundation_volume attributes in tmp.
+        tmp := inundation_volume
+        ; Change _FillValue attribute to default for byte. 
+        tmp@_FillValue = default_fillvalue(typeof(inundation_true))
+        copy_VarAtts(tmp, inundation_true)
         inundation_true@long_name = "1b=inundated"
-        inundation_true@stride = stride
         inundation_true!0="time"
         inundation_true&time = zeta&time
         inundation_true!1="node"
@@ -289,7 +335,6 @@ begin
         copy_VarMeta(inundation_volume, length_scale)
         length_scale@long_name = "length_scale of inundation zone"
         length_scale@units = "km"
-        length_scale@stride = stride
         g->length_scale = length_scale
 
         volume_in_ctrl = new(dimsizes(inundation_volume),typeof(inundation_volume))
@@ -328,7 +373,6 @@ begin
     LSres@cnExplicitLineLabelsOn = True
     LSres@cnLineLabelBackgroundColor = -1
     LSres@cnLineLabelInterval = 1
-    LSres@sfFirstNodeIndex = res@sfFirstNodeIndex
     LSres@sfXArray = res@sfXArray
     LSres@sfYArray = res@sfYArray
     LSres@cnInfoLabelString = "length scale $CMN$ to $CMX$ km"
@@ -342,7 +386,9 @@ begin
     end if
 
     first_frame = True
-    do itime=0,ntime-1,1
+    do itime=0,ntime-1,1 ; If you want a specific itime, change both 0 and ntime to itime
+    ;tt = 0 ; +720
+    ;do itime=tt+130,tt+150
         ; Vertical line at current time
         sres@gsnXRefLine = f->time(itime)
         sres@gsnRightString = date_str1(itime) 
@@ -384,7 +430,8 @@ begin
 
         if(.not.minus_astronomical_tide)then
             ; inundation is water height minus surface height (depth is negative surface height)
-            inundation = zeta1 + depth
+            ;inundation = zeta1 + depth
+            inundation = zeta1 
             copy_VarMeta(zeta1, inundation)
             inundation@long_name = "depth of water over normally dry land ("+dryland+">=0)"
         else
@@ -401,12 +448,13 @@ begin
         ; Mask ocean
         ; In other words, mask all nodes with depth>0, but not start-dry nodes.
         ; sfc_sub_state is missing or 1. 1 is land that starts dry but depth>0 (is below MSL). 
-        inundation = mask(inundation, depth.le.0 .or. sfc_sub_state.eq.1, True)
-        print(num(.not.ismissing(inundation))+" inundated (=>0) nodes")
+        ;inundation = mask(inundation, depth.le.0 .or. sfc_sub_state.eq.1, True)
+        ;print(num(.not.ismissing(inundation))+" inundated (=>0) nodes")
 
         if(dryland.eq."MHHW")then
             ; Don't consider nodes below the mean higher high water mark as normally dry. Mask them.
-            ; Use MHHW to mask nodes, but don't apply mask where MHHW is missing. This happens where(where Vdatum couldn't convert, like over land or deep into Gulf)
+            ; Use MHHW to mask nodes, but don't apply mask where MHHW is missing.
+            ; This happens where(where Vdatum couldn't convert, like over land or deep into Gulf)
             ; or MHHW >= 0 (above normally dry land).
             inundation = mask(inundation, ismissing(hgt_MHHW).or.hgt_MHHW.ge.0, True)
             print(num(.not.ismissing(inundation))+" inundated nodes after masking nodes below MHHW=0")
@@ -435,6 +483,7 @@ begin
             continue
         end if
 
+        print("getting length scale...")
         left_length_km  = get_length_scale(volume,dist_right, left_percentile/100.)
         right_length_km = get_length_scale(volume,dist_right, right_percentile/100.)
         g->length_scale(itime) = right_length_km - left_length_km
@@ -455,13 +504,17 @@ begin
         ; .gt.0. used to be .ge.0, but we don't want dry land nodes
         bi := ind(dist_right.ge.left_length_km.and.dist_right.le.right_length_km.and.volume.gt.0.)
         if(.not.any(ismissing(bi)))then
+            print("Get inundation_volume, average_depth, inundation_area, inundation_true.")
             inundation_volume(itime) = sum(volume(bi))
             g->inundation_volume(itime) = (/ inundation_volume(itime) /)
             g->average_depth(itime) = sum(inundation(bi)*areaCell(bi))/ sum(areaCell(bi))
             g->inundation_area(itime) = sum(areaCell(bi)) * stride
-            ; remember to reset zeroes or else you get 1's from previous runs.
-            g->inundation_true(itime,:) = 0b
-            g->inundation_true(itime,bi) = 1b
+            ; Create tmp array. Faster than assigning to 1b.  I think it is because of large file netcdf4 slowness
+            ; Removed initialization to zero. It starting hanging the program Mar 2018.
+            print("Assigning inundation_true=1b to "+sprinti("%i",dimsizes(bi))+" points")
+            tmp := new(dimsizes(depth),byte,0b)
+            tmp(bi) = 1b
+            g->inundation_true(itime,:) = (/ tmp /)
         end if
 
         ; Tried gsnLeftString resource but it wouldn't update the resource on the map object after I created map.
@@ -469,14 +522,19 @@ begin
         desc = desc +"~C~inundation zone volume " + sprintf(":%6.2f", inundation_volume(itime)) + inundation_volume@units + "   length:" + sprintf("%4.0fkm",right_length_km-left_length_km) + "   average depth: " + sprintf("%.1fm",g->average_depth(itime)) + "    area: "+ sprintf("%.0f km~S~2~N~",g->inundation_area(itime)) + "~C~normally-dry land datum=" + dryland
 
         ; Inundated nodes in control run.
-        ; If you get error about file (c) isn't defined, just run again.
-        icontrol := ind(c->inundation_true(maxind(c->inundation_volume),:).eq.1)
-        if(.not.any(ismissing(icontrol)))then
-            volume_in_ctrl(itime) = sum(volume(icontrol))
-            if(one_frame)then
-                ; Draw pink dots
-                dots := gsn_add_polymarker(wks,map,res@sfXArray(icontrol),res@sfYArray(icontrol),noderes)
-                desc = desc + "~C~inundation zone volume intersecting inundation zone of control run (pink): " + sprintf("%6.2fkm~S~3~N~",volume_in_ctrl(itime))
+        if(modelstr.eq."control")then
+            volume_in_ctrl(itime) = g->inundation_volume(itime) 
+        else
+            print("Finding inundated nodes in control run...")
+            ; If you get error about file (c) isn't defined, run control first.
+            icontrol := ind(c->inundation_true(maxind(c->inundation_volume),:).eq.1)
+            if(.not.any(ismissing(icontrol)))then
+                volume_in_ctrl(itime) = sum(volume(icontrol))
+                if(one_frame)then
+                    ; Draw pink dots
+                    ;dots := gsn_add_polymarker(wks,map,res@sfXArray(icontrol),res@sfYArray(icontrol),noderes)
+                    ;desc = desc + "~C~inundation zone volume intersecting inundation zone of control run (pink): " + sprintf("%6.2fkm~S~3~N~",volume_in_ctrl(itime))
+                end if
             end if
         end if
         gsn_text_ndc(wks, desc, 0.204, 0.63, txres)
@@ -529,8 +587,7 @@ begin
         else
             print(date_str(f->time(itime))+": did not find > 2 unique values for y axis")
         end if
-        ; meta data for sanity check
-        ; for some reason putting systemfunc("date") in the do loop resulted in random crashes
+        ; Annotate figure with time/date, node stride, and creation date
         currentdate = systemfunc("date")
         gsn_text_ndc(wks,date_str(f->time(itime)) +\
             sprinti("~C~every %.0i nodes",stride)+\
