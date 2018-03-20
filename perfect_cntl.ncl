@@ -63,7 +63,7 @@ begin
     iregion = get_iregion(f, region)
     k = ind(iregion .and. f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
     
-    tmpdir = "/glade/scratch/"+getenv("USER")+"/"
+    tmpdir = "/glade/scratch/"+getenv("USER")+"/temp/"
     obs_file   = tmpdir + stormname+  ".control"+".zoom"+zoom+".nc" ; temporary mesh zoomed to lat/lon bounds
     model_file = tmpdir + stormname+"."+modelstr+".zoom"+zoom+".nc" ; used later in script
     files = (/ obs_file, model_file /)
