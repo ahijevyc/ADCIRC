@@ -122,20 +122,33 @@ begin
     timeseries_file = outfile + ".timeseries.nc"
     zeta := f->zeta ; read water height from processed (smaller) file
     depth := f->depth
+    ntime = dimsizes(zeta&time)
     if(minus_astronomical_tide)then
         ; Subtract water level with no storm. Just astronomical tide.
         ; This will give storm surge (the change in water level due to storm).
         coldstart_k = modeldir + "../coldstart_extend/" + systemfunc("basename "+model_file) + ".nc"
-        a = addfile(coldstart_k, "r")
+        cse = addfile(coldstart_k, "r")
         if(.not.isfilepresent(coldstart_k)) then
             print("Did not find "+coldstart_k)
             print("Trim coldstart domain with modelstr='coldstart_extend' first.")
             exit
         end if 
-        surface_height = reshape(-a->depth,dimsizes(a->zeta))
+        surface_height = reshape(-cse->depth,dimsizes(cse->zeta))
         ; Change missing values in astronomical tide run to surface height (-depth).
         ; now zeta is height of water or land (whichever is higher).
-        zeta_nostorm = where(ismissing(a->zeta), surface_height, a->zeta)
+        zeta_nostorm = where(ismissing(cse->zeta), surface_height, cse->zeta)
+        if(ntime.lt.dimsizes(cse->zeta&time))then
+            print("Perturbed time series shorter than coldstart_extend.")
+            ; Can't check for "speed+" because of nws_19 stuff
+            if(str_get_cols(modelstr,0,4).ne."speed".or.stormname.ne."IRMA")then
+                print("expected with positive speed and Irma")
+                print("not "+modelstr+" and "+stormname)
+                exit
+            end if
+            print("Truncating coldstart_extend.")
+            surface_height := surface_height(0:ntime-1,:)
+            zeta_nostorm   :=   zeta_nostorm(0:ntime-1,:)
+        end if
         ; Change missing values in storm run to surface height (-depth).
         zeta = where(ismissing(zeta),surface_height,zeta)
         print("subtracting astronomical tide from storm tide")
@@ -145,30 +158,36 @@ begin
         print("subtracted astronomical tide")
     end if
 
-    printVarSummary(zeta)
-    printMinMax(zeta,False)
     if(min(zeta).le.-12.or.max(zeta).gt.12.)then
         print("zeta out of whack.  Stopping")
-        iwhack = ind_resolve(maxind(ndtooned(zeta)),dimsizes(zeta))
+        printVarSummary(zeta)
+        printMinMax(zeta,False)
+        if(max(zeta).gt.12)then
+            iwhack = ind_resolve(maxind(ndtooned(zeta)),dimsizes(zeta))
+        end if
+        if(min(zeta).lt.12)then
+            iwhack = ind_resolve(minind(ndtooned(zeta)),dimsizes(zeta))
+        end if
         print(iwhack)
-        print(f->x(iwhack(0,1)))
-        print(f->y(iwhack(0,1)))
-        iwhack = ind_resolve(minind(ndtooned(zeta_nostorm)),dimsizes(zeta_nostorm))
-        print(iwhack)
-        print(a->x(iwhack(0,1)))
-        print(a->y(iwhack(0,1)))
-        junk := zeta_nostorm(iwhack(0,0),:)
+        lon = f->x(iwhack(0,1))
+        lat = f->y(iwhack(0,1))
+        junk := f->zeta(iwhack(0,0),:)
         res@sfDataArray    := junk
-        res@sfXArray                 = a->x
-        res@sfYArray                 = a->y
-        res@cnFillMode               = "RasterFill"
-        res@cnFillOn                 = True
-        res@cnLinesOn                = False
+        res@sfXArray        = cse->x
+        res@sfYArray        = cse->y
+        res@cnFillMode      = "RasterFill"
+        res@cnFillOn        = True
+        res@cnLinesOn       = False
+        map := gsn_csm_contour_map(wks,junk,res)
+        ; Zoom in on trouble spot
+        res@mpMaxLonF       =  tofloat(lon)+1 ; lon is a double
+        res@mpMinLonF       =  tofloat(lon)-1
+        res@mpMaxLatF       =  tofloat(lat)+1
+        res@mpMinLatF       =  tofloat(lat)-1
         map := gsn_csm_contour_map(wks,junk,res)
         exit
     end if
 
-    ntime = dimsizes(zeta&time)
     nnodes = dimsizes(depth)
     sfc_sub_state := f->sfc_sub_state
     hgt_MHHW      := f->hgt_MHHW
@@ -394,9 +413,18 @@ begin
         sres@gsnRightString = date_str1(itime) 
         print(date_str(f->time(itime)))
 
+        ; Does the ADCIRC time series go past fort.22?
+        ; Met forcing probably absent, so skip frame time.
+        if(f->time(itime).gt.max(tracktime))then
+            print("ADCIRC time is after final fort.22 time. skipping time.")
+            printMinMax(tracktime,False)
+            continue
+        end if
+
         ; Get current lat/lon of storm, interpolating fort.22
         ; Find first track time later than frame time, tracki
         tracki = min(ind(tracktime .ge. f->time(itime)))
+
         if(rad(tracki).ne.34.and.rad(tracki).ne.0)then
             ; sanity check; tracki should correspond to a rad=34kt line and tracki-1 to a 34, 50, or 64kt line.
             ; This was true for Ike, but not Charley, in Charley there are 0kt lines (with no accompanying 34kt lines).
@@ -428,17 +456,16 @@ begin
         dist_right = dist * -sin(LorR/180.*3.141592)
         zeta1 := zeta(itime,:)
 
-        if(.not.minus_astronomical_tide)then
-            ; inundation is water height minus surface height (depth is negative surface height)
-            ;inundation = zeta1 + depth
-            inundation = zeta1 
-            copy_VarMeta(zeta1, inundation)
-            inundation@long_name = "depth of water over normally dry land ("+dryland+">=0)"
-        else
-            inundation = zeta1
+        if(minus_astronomical_tide)then
+            inundation = zeta1 ; zeta_nostorm was subtracted before this itime do-loop.
             ; Plot storm surge (minus_astronomical_tide=True).
             res@sfDataArray    = inundation
             map := gsn_csm_contour_map(wks,inundation,res)
+        else
+            ; inundation is water height minus surface height (depth is negative surface height)
+            inundation = zeta1 + depth
+            copy_VarMeta(zeta1, inundation)
+            inundation@long_name = "depth of water over normally dry land ("+dryland+">=0)"
         end if
 
         res@lbTitleString  = inundation@units
@@ -448,8 +475,8 @@ begin
         ; Mask ocean
         ; In other words, mask all nodes with depth>0, but not start-dry nodes.
         ; sfc_sub_state is missing or 1. 1 is land that starts dry but depth>0 (is below MSL). 
-        ;inundation = mask(inundation, depth.le.0 .or. sfc_sub_state.eq.1, True)
-        ;print(num(.not.ismissing(inundation))+" inundated (=>0) nodes")
+        inundation = mask(inundation, depth.le.0 .or. sfc_sub_state.eq.1, True)
+        print(num(.not.ismissing(inundation))+" inundated (=>0) nodes")
 
         if(dryland.eq."MHHW")then
             ; Don't consider nodes below the mean higher high water mark as normally dry. Mask them.
@@ -543,7 +570,7 @@ begin
         g->volume_in_ctrl(itime) = (/ volume_in_ctrl(itime) /)
 
         if(.not.first_frame.and.one_frame)then
-            print("not drawing this frame")
+            print("1 frame complete. Not drawing any more.")
             continue
         end if
         first_frame = False
