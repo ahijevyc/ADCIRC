@@ -6,7 +6,8 @@ load "/glade/p/work/ahijevyc/ncl/get_length_scale.ncl"
 load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/p/work/ahijevyc/ncl/CreateTracks.ncl"
 load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
-load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl"
+load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
+load "/glade/p/work/ahijevyc/ADCIRC/minus_astronomical_tide.ncl"
 
 begin
 
@@ -102,6 +103,7 @@ begin
         g->depth = f->depth(k)
         g->x = f->x(k)
         g->y = f->y(k)
+        ; get area asssociated with each node (loaded above with get_MHHW.ncl)
         g->areaCell = areaCell(k)
 
         ;sfc_sub_state was defined in get_MHHW.ncl
@@ -124,38 +126,7 @@ begin
     depth := f->depth
     ntime = dimsizes(zeta&time)
     if(minus_astronomical_tide)then
-        ; Subtract water level with no storm. Just astronomical tide.
-        ; This will give storm surge (the change in water level due to storm).
-        coldstart_k = modeldir + "../coldstart_extend/" + systemfunc("basename "+model_file) + ".nc"
-        cse = addfile(coldstart_k, "r")
-        if(.not.isfilepresent(coldstart_k)) then
-            print("Did not find "+coldstart_k)
-            print("Trim coldstart domain with modelstr='coldstart_extend' first.")
-            exit
-        end if 
-        surface_height = reshape(-cse->depth,dimsizes(cse->zeta))
-        ; Change missing values in astronomical tide run to surface height (-depth).
-        ; now zeta is height of water or land (whichever is higher).
-        zeta_nostorm = where(ismissing(cse->zeta), surface_height, cse->zeta)
-        if(ntime.lt.dimsizes(cse->zeta&time))then
-            print("Perturbed time series shorter than coldstart_extend.")
-            ; Can't check for "speed+" because of nws_19 stuff
-            if(str_get_cols(modelstr,0,4).ne."speed".or.stormname.ne."IRMA")then
-                print("expected with positive speed and Irma")
-                print("not "+modelstr+" and "+stormname)
-                exit
-            end if
-            print("Truncating coldstart_extend.")
-            surface_height := surface_height(0:ntime-1,:)
-            zeta_nostorm   :=   zeta_nostorm(0:ntime-1,:)
-        end if
-        ; Change missing values in storm run to surface height (-depth).
-        zeta = where(ismissing(zeta),surface_height,zeta)
-        print("subtracting astronomical tide from storm tide")
-        zeta = zeta - zeta_nostorm
-        zeta@minus_astronomical_tide = minus_astronomical_tide
-        zeta@long_name = "storm surge (storm tide minus astronomical tide)"
-        print("subtracted astronomical tide")
+        zeta = subtract_tide(zeta, model_file)
     end if
 
     if(min(zeta).le.-12.or.max(zeta).gt.12.)then
@@ -377,7 +348,7 @@ begin
     txres@txFontHeightF = 0.01
     txres@txJust        = "BottomLeft"
 
-    ; Dot nodes 
+    ; Draw a dot on each node.
     noderes                  = True
     noderes@gsMarkerColor    = "pink"
     noderes@gsMarkerIndex    = 1
