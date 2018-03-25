@@ -24,10 +24,6 @@ begin
     if(.not.isdefined("zoom")) then
         zoom = 1
     end if
-    ; region
-    if(.not.isdefined("region")) then
-        region = ""
-    end if
     if(.not.isvar("minus_astronomical_tide"))then
         minus_astronomical_tide = False
     end if
@@ -45,22 +41,32 @@ begin
         print("Expected MHHW or LMSL")
         exit
     end if
+    if(type.eq."total".and.thresh.eq.0.)then
+        print("type=total and thresh=0")
+        print("Set positive threshold.")
+        exit
+    end if
 
     res = True
     ; Assign domain min/max lat/lon attributes to res.
     res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
 
-    members = systemfunc("ls "+basedir+"ens_*/latlon_0.125deg_000km/maxele.63.nc")
+    members    = systemfunc("ls "+basedir+"ens_*/latlon_0.125deg_000km/maxele.63.nc")
+    trackfiles = systemfunc("ls "+basedir+"ens_*/latlon_0.500deg_025km/gfdl_tracker/tracker/IrmaTrack.atcf"  )
+    
+    ; for perturbed ensemble
+    ; ncl 'modelstr="vmax_nws19"' 'type="total"' thresh=1 ../ensemble_avg_plot.ncl
+    members    := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/maxele.63.nc")
+    trackfiles := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/fort.22")
+
     ensemble =  addfiles(members, "r")
     ListSetType(ensemble, "join")
     f = ensemble[0]
 
     domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
-                   sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF) + region
-    outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + "."+sprintf("stride%02.0f.",stride)+domainString+"."+type
-    iregion = get_iregion(f, region)
-    k = ind(iregion .and. f->x .ge.res@mpMinLonF .and. f->x .le.res@mpMaxLonF\
-                    .and. f->y .ge.res@mpMinLatF .and. f->y .le.res@mpMaxLatF)
+                   sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF)
+    outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + \
+              "."+sprintf("stride%02.0f.",stride)+domainString+"."+type
 
     zeta_max   = ensemble[:]->zeta_max
     depth      = ensemble[:]->depth
@@ -96,8 +102,9 @@ begin
 
     ; Only retain land values and low-lying land nodes below MSL (sfc_sub_state=1, or "startDry" nodes). 
     x_inundation = mask(x_inundation, f->depth.le.0 .or. (sfc_sub_state.eq.1), True)
+    ; Only retain values above inundation threshold.
     x_inundation = mask(x_inundation, x_inundation.ge.thresh, True)
-    x_inundation@long_name = "Ensemble " + type + " maximum inundation >="+thresh_string
+    x_inundation@long_name = modelstr+"~C~ensemble " + type + " maximum inundation >="+thresh_string
     if(.not.isatt(x_inundation,"units"))then
         x_inundation@units     = zeta_max@units
     end if
@@ -143,8 +150,7 @@ begin
 
     map := gsn_csm_contour_map(wks,x_inundation,res)
 
-    ; draw tracks for all veers
-    trackfiles = systemfunc("ls "+basedir+"ens_*/latlon_0.500deg_025km/gfdl_tracker/tracker/IrmaTrack.atcf"  )
+    ; draw tracks for all members
     do iveer=0,dimsizes(trackfiles)-1  
         trackfile = trackfiles(iveer)
         iens = str_index_of_substr(trackfile,"/ens_",1)
