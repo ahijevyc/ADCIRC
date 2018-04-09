@@ -245,19 +245,23 @@ begin
     resTick@ttmMinorStride = 12
     time_axis_labels(f->time, sres, resTick)
  
-    control_timeseries_file := str_sub_str(timeseries_file,modelstr,"control")
+    control_str = "control"
+    if(isStrSubset(modelstr,"_nws19").or.isStrSubset(modelstr,"coldstart"))
+        control_str = "control_nws19"
+    end if
+    control_timeseries_file := str_sub_str(timeseries_file,modelstr,control_str)
    
     ; If you are analyzing something other than control,
     ; the control time series file should exist already.
-    if(modelstr.ne."control")then
+    if(modelstr.eq.control_str)then
+        print("Time series and inundation nodes for control will be defined now.")
+    else
         if(fileexists(control_timeseries_file))then
             c = addfile(control_timeseries_file,"r")
         else
             print("didn't find "+control_timeseries_file+". Run with modelstr = control first.")
             exit
         end if
-    else
-        print("Time series and inundation nodes for control will be defined now.")
     end if
     print("control_timeseries_file="+control_timeseries_file)
 
@@ -267,6 +271,7 @@ begin
         g = addfile(timeseries_file,"w")
         if(ismissing(g))then
             print("couldn't open for writing")
+            exit
         end if
         inundation_volume = g->inundation_volume
         inundation_true   = g->inundation_true
@@ -520,7 +525,7 @@ begin
         desc = desc +"~C~inundation zone volume " + sprintf(":%6.2f", inundation_volume(itime)) + inundation_volume@units + "   length:" + sprintf("%4.0fkm",right_length_km-left_length_km) + "   average depth: " + sprintf("%.1fm",g->average_depth(itime)) + "    area: "+ sprintf("%.0f km~S~2~N~",g->inundation_area(itime)) + "~C~normally-dry land datum=" + dryland
 
         ; Inundated nodes in control run.
-        if(modelstr.eq."control")then
+        if(modelstr.eq.control_str)then
             volume_in_ctrl(itime) = g->inundation_volume(itime) 
         else
             print("Finding inundated nodes in control run...")
