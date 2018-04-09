@@ -1,8 +1,23 @@
 load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
 load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
+load "/glade/p/work/ahijevyc/ADCIRC/minus_astronomical_tide.ncl"
 
-; Compare maximum inundation heights in control and perturbed runs.
+; Compare maximum inundation depth in control and perturbed runs.
+
+; Max over time.
+; You can't calculate volume cause it doesn't make sense.
+; This is a max over time at each point. 
+; The inundation is never actually this much at any time.  
+; The max water height is spread over time as it washes over the land.
+; That's why the number here is so much larger than in the instantaneous bulge_timeseries. 
+
+; Both perfect_cntl.ncl and bulge_timeseries.ncl can subtract astronomical tide.
+; The prodedure is complicated and I would like to do it the same way, but I don't. 
+; If you find something wrong with the way it is done in one of them, make sure you 
+; fix the other one too.
+
+
 
 begin
 
@@ -15,7 +30,13 @@ begin
     stride = 1
     basedir = "/glade/p/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
-    obsdir   = basedir + stormname+"/control/"
+    control_str = "control"
+    if(isStrSubset(modelstr,"_nws19").or.isStrSubset(modelstr,"coldstart"))
+        control_str = "control_nws19"
+    end if
+    obsdir   = str_sub_str(modeldir,modelstr,control_str)
+    csedir   = str_sub_str(modeldir,modelstr,"coldstart_extend")
+
     ; zoom level
     if(.not.isdefined("zoom")) then
         zoom = 1
@@ -54,20 +75,23 @@ begin
     res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
 
     f63 = modeldir+"maxele.63.nc"
-    print("opening "+f63)
+    print("opening perturbation zeta_max "+f63)
     f = addfile(f63,"r")
 
     domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
                    sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF) + region
-    outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + "."+sprintf("stride%02.0f.",stride)+domainString+".perfectmodel"
+    outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + \
+              "."+sprintf("stride%02.0f.",stride)+domainString+".perfectmodel"
     iregion = get_iregion(f, region)
     k = ind(iregion .and. f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
     
     tmpdir = "/glade/scratch/"+getenv("USER")+"/temp/"
-    obs_file   = tmpdir + stormname+  ".control"+".zoom"+zoom+".nc" ; temporary mesh zoomed to lat/lon bounds
-    model_file = tmpdir + stormname+"."+modelstr+".zoom"+zoom+".nc" ; used later in script
-    files = (/ obs_file, model_file /)
-    full_files = (/ obsdir, modeldir /) + "maxele.63.nc"
+    uniqid = systemfunc("echo $$")
+    obs_file   = tmpdir + stormname+"."+uniqid+".control.zoom"+zoom+".nc" ; temporary mesh zoomed to lat/lon bounds
+    model_file = tmpdir + stormname+"."+uniqid+".perturb.zoom"+zoom+".nc" ; used later in script (used to be modelstr, but doesn't work when modelstr=control)
+    cse_file   = tmpdir + stormname+"."+uniqid+".cse.zoom"    +zoom+".nc" ; Coldstart extend could be used later in script
+    files = (/ obs_file, model_file/)
+    full_files = (/ obsdir, modeldir/) + "maxele.63.nc"
 
     if(any(ismissing(k)))then
         print("no nodes in zoom domain and/or region?")
@@ -76,35 +100,70 @@ begin
         print(res)
         exit
     end if
+    if(minus_astronomical_tide)then
+        ; Aside - How to subtract tide from max water over time?
+        ;  Do you create a "difference" time series first
+        ; and then find the maximum? Or just subtract zeta_max's? This script does the latter. 
+        files      := array_append_record(files, cse_file, 0)
+        full_files := array_append_record(full_files, csedir + "maxele.63.nc", 0)
+    end if
     ; sfc_sub_state was defined in get_MHHW.ncl
+    copy_VarCoords(f->depth, sfc_sub_state)
     sfc_sub_state := sfc_sub_state(k)
-    hgt_MHHW := hgt_MHHW(k)
+    hgt_MHHW      := hgt_MHHW(k)
 
-    ; loop through control (i=0) and model (i=1)
-    do i=0,1
-        ; Read zeta_max, depth, x, y, and areaCell from full-field file.
+
+    ; Loop through 3 files first and trim to domain
+    ; 1) control (i=0)
+    ; 2) perturbed (i=1)
+    ; 3) coldstart_extend (i=2)
+    ; Remember trimmed coldstart_extend (cse) for later.
+    do i=0,dimsizes(files)-1
+        ; Read zeta_max, depth, x, and y from full-field file.
         ; Trim domain and derive inundation.
         system("rm -v "+files(i)) 
         g = addfile(files(i),"c")
+        print("opening "+full_files(i)+" for reading")
         f = addfile(full_files(i),"r")
         ; Trim zeta_max, depth, x, y, areaCell to indices where k=True (lat/lon conditions above)
         ; Saved trimmed variables to ncl file variable "g"
         g->zeta_max = f->zeta_max(k)
-        g->depth = f->depth(k)
-        g->x = f->x(k)
-        g->y = f->y(k)
+        g->depth    = f->depth(k)
+        g->x        = f->x(k)
+        g->y        = f->y(k)
         ; get area asssociated with each node (loaded above with get_MHHW.ncl)
         g->areaCell = areaCell(k)
-
-        ; Max inundation. You can calculate volume but it doesn't make sense. This is a max over time at each point. 
-        ; The inundation is never actually this much at any time.  The max water height is spread over time as it washes over the land.
-        ; That's why the number here is so much larger than the number in the instantaneous bulge_timeseries. 
-        inundation = g->zeta_max + g->depth
-        ; Set missing values to zero. Don't use num() to count non-missing values (zero is not missing but is not True either).
-        if(any(ismissing(g->zeta_max)))then
-            inundation(ind(ismissing(g->zeta_max))) = 0.
+        if(i.eq.2)then
+            ; coldstart_extend (tide-only)
+            cse = g->zeta_max
         end if
-        ; Only retain land values and low-lying land nodes below MSL (sfc_sub_state=1, or "startDry" nodes). 
+    end do
+    ; Just loop thru control (i=0) and perturbed (i=1) and subtract cse if requested.
+    ; Calculate inundation.
+    do i=0,1
+        print("addfile for writing "+files(i))
+        g = addfile(files(i),"w")
+
+        if(minus_astronomical_tide)then
+            ; Same procedure in minus_astronomical_tide.ncl.
+            solid_ground_height = -g->depth
+            ; Change missing values in storm run to solid ground height.
+            zeta         = where(ismissing(g->zeta_max), solid_ground_height, g->zeta_max) 
+            ; Change missing values in coldstart_extend run to solid ground height.
+            zeta_nostorm = where(ismissing(cse), solid_ground_height, cse)
+            ; Subtract astronomical tide from storm tide.
+            inundation = zeta - zeta_nostorm
+        else
+            inundation = g->zeta_max + g->depth
+            ; Set missing values to zero. Don't use num() to count non-missing values (zero is not missing but is not True either).
+            if(any(ismissing(g->zeta_max)))then
+                inundation(ind(ismissing(g->zeta_max))) = 0.
+            end if
+        end if
+
+
+        ; Retain land nodes (negative or zero depth) and "startDry" nodes (sfc_sub_state=1).
+        ; "startDry" nodes start dry, but are below MSL (positive depth).
         inundation = mask(inundation, (g->depth).le.0 .or. (sfc_sub_state.eq.1), True)
         inundation@long_name = "maximum inundation (all times)"
         inundation@units     = "m"
@@ -112,7 +171,7 @@ begin
             print(num(.not.ismissing(inundation))+" inundated nodes before masking nodes below MHHW=0")
             ; Preserve nodes with missing MHHW (where Vdatum couldn't convert, like over land or deep into Gulf)
             ; or MHHW >= 0 (above normally dry land).
-            inundation         = mask(inundation, ismissing(hgt_MHHW).or.hgt_MHHW.ge.0, True)
+            inundation       = mask(inundation, ismissing(hgt_MHHW).or.hgt_MHHW.ge.0, True)
             print(num(.not.ismissing(inundation))+" inundated nodes after masking nodes below MHHW=0")
         end if
         g->inundation = inundation
@@ -135,12 +194,9 @@ begin
     tracklon = adeck@lon
     tracklat = adeck@lat
 
+    print("reading perturbed file "+model_file)
     f = addfile(model_file,"r")
     nnodes = dimsizes(f->zeta_max) ; number of nodes
-    inundation = f->inundation
-    zeta_max   = f->zeta_max
-    depth      = f->depth
-    ;areaCell  := f->areaCell
 
     gsn_define_colormap(wks,"WhiteBlueGreenYellowRed")
     res@cnLevelSelectionMode     = "ManualLevels"
@@ -148,11 +204,9 @@ begin
     res@cnMaxLevelValF           =  5.
     res@cnLevelSpacingF          =  0.5
 
-    res@sfFirstNodeIndex         = 1
     res@sfXArray                 = f->x
     res@sfYArray                 = f->y
-    res@sfDataArray              = inundation
-
+    res@sfDataArray              = f->inundation
 
     res@cnFillOn                 = True
     res@cnLinesOn                = False
@@ -161,7 +215,7 @@ begin
     res@cnLineLabelPlacementMode = "Constant"
     res@lbLabelAutoStride        = True
     res@lbTitleString            = "maximum inundation (meters)"
-    res@lbTitleFontHeightF       = 0.018
+    res@lbTitleFontHeightF       = 0.01
     res@lbTitlePosition          = "Bottom"
 
     res@gsnCenterString          = modelstr
@@ -177,7 +231,7 @@ begin
     lres@gsLineThicknessF     =  4.
 
 
-    map := gsn_csm_contour_map(wks,inundation,res); attributes matter, but 2nd argument data values have no influence; had to define res@sfDataArray.
+    map := gsn_csm_contour_map(wks,f->inundation,res); attributes matter, but 2nd argument data values have no influence; had to define res@sfDataArray.
     getvalues map@contour ; used in histogram
         "cnLevels" : cnLevels
         "cnFillColors" : cnFillColors
@@ -185,23 +239,22 @@ begin
 
     ; Annotate plot with domain info and creation date.
     txres = True
-    txres@txFontHeightF = 0.015
+    txres@txFontHeightF = 0.01
     txres@txJust        = "BottomLeft"
     gsn_text_ndc(wks, "domain "+tostring(zoom)+"~C~"+systemfunc("date"),0.01,0.01,txres)
 
     ; Draw a dot on each node.
-    noderes                   = True
-    noderes@gsMarkerIndex     = 1
-    noderes@gsMarkerSizeF     = 0.001
-    noderes@gsMarkerOpacityF  = 0.007
+    noderes                  = True
+    noderes@gsMarkerColor    = "pink"
+    noderes@gsMarkerIndex    = 1
+    noderes@gsMarkerSizeF    = 0.001
+    noderes@gsMarkerOpacityF = 0.09
 
     ; Get "observations" from control run.
-    print("reading "+obs_file)
-    print(model_file)
+    print("reading control file "+obs_file)
     g = addfile(obs_file,"r")
-    obs = g->inundation
-    g = addfile(model_file,"r")
-    model=g->inundation
+    obs   = g->inundation
+    model = f->inundation
     obsres = True
     obsres@gsMarkerIndex = 16
     obsres@gsMarkerColor = "dark green"
@@ -216,7 +269,9 @@ begin
     end if
 
     tmp := maxind(abs(obs-model))
-    print("obs="+tostring(obs(tmp))+" model="+tostring(model(tmp))+" at "+tostring(g->x(tmp))+"E "+tostring(g->y(tmp))+" depth="+tostring(g->depth(tmp))+" sfc_sub_state="+tostring(sfc_sub_state(tmp)))
+    print("obs="+tostring(obs(tmp))+" model="+tostring(model(tmp))+" at "+\
+          tostring(g->x(tmp))+"E "+tostring(g->y(tmp))+" depth="+tostring(g->depth(tmp))+\
+          " sfc_sub_state="+tostring(sfc_sub_state(tmp)))
     printVarSummary(obs)
     printMinMax(obs,False)
     printVarSummary(model)
@@ -228,10 +283,10 @@ begin
         exit
     end if
     rc = regCoef(obs, model); regCoef and regline return slope of best-fit line
-    ; Do we handle missing values in obs and/or model?
-    ; For a dry node, zeta_max is missing. A node may be dry in one run & wet in another.
-    ; Yes. Above, I replaced missing zeta_max values with zero, so stats
-    ; include all points where either the model or obs are wet. 
+    ; If a node does not get wet at all during the run, zeta_max is missing. 
+    ; Do we handle missing values in obs and/or model? Yes.
+    ; Above, we treated missing value as zero inundation.
+    ; Therefore, stats include all normally-dry nodes, as specified by "dryland".
     print(rc)
     if(rc@nptxy.lt.3)then
         frame(wks)
@@ -239,13 +294,22 @@ begin
         exit
     end if
     r := sum((obs-avg(obs))*(model-avg(model)))/stddev(obs)/stddev(model)/(rc@nptxy-1)
+    ; Sanity check. Make sure r is unity for control.
+    if(.not.ismissing(str_index_of_substr(modelstr,"control",1)))then
+        if(abs(r-1).gt.0.00001)then
+            print("If this is the control, r should be 1 (within machine precision)")
+            print(r)
+            exit
+        end if
+    end if
     r2 := r^2.
     r2@long_name = "squared Pearson correlation coefficient"
     rmse = sqrt(avg((obs-model)^2))
-    si = stddev(obs-model)/avg(obs)
+    scatterindex = stddev(obs-model)/avg(obs)
     out2->obs = obs
     out2->model = model
     out2->r2 = r2
+    out2@full_files = full_files
 
     xyres                 = True                   ; plot mods desired
     xyres@gsnDraw         = False
@@ -256,23 +320,25 @@ begin
     xyres@vpYF            = 0.96
     xyres@vpHeightF       = 0.20 
 
-    xyres@gsnMaximize         = False                  ; maximize plot in frame
-    xyres@xyMarkLineMode      = "Markers"  ; choose which have markers
-    xyres@xyMarker            = obsres@gsMarkerIndex               ; choose type of marker 
+    xyres@gsnMaximize         = False                       ; maximize plot in frame
+    xyres@xyMarkLineMode      = "Markers"                   ; choose which have markers
+    xyres@xyMarker            = obsres@gsMarkerIndex        ; choose type of marker 
     xyres@xyMarkerColor       = "dark green"                ; Marker color
-    xyres@xyMarkerSizeF       = obsres@gsMarkerSizeF         ; Marker size (default 0.01)
+    xyres@xyMarkerSizeF       = 0.002; obsres@gsMarkerSizeF ; Marker size (default 0.01)
     xyres@xyMarkerThicknessF  = obsres@gsMarkerThicknessF 
     xyres@xyDashPattern       = "Solid"               
     xyres@xyLineThicknessF    = 1 
     xyres@xyLineColor         = xyres@xyMarkerColor
     xyres@xyLabelMode         = "Custom"
     xyres@gsnShape            = True
-    xyres@trYMinF             = 0.
-    xyres@trXMinF             = 0.
-    xyres@trYMaxF             = 8.
-    xyres@trXMaxF             = 8.
+    ; can have negative "storm" surge
+    xyres@trYMinF             = -0.5
+    xyres@trXMinF             = -0.5
+    xyres@trYMaxF             = 5.
+    xyres@trXMaxF             = 5.
 
-    xyres@tiMainString        = "n="+sprintf("%.0f",rc@nptxy)+", r~S~2~N~="+sprintf("%4.2f",r2)+", multiplic. bias="+sprintf("%4.2f",avg(model)/avg(obs))+"~C~scatter index="+sprintf("%4.2f",si) + ", RMSE="+sprintf("%4.2fm",rmse)
+
+    xyres@tiMainString        = "n="+sprintf("%.0f",rc@nptxy)+", r~S~2~N~="+sprintf("%4.2f",r2)+", multiplic. bias="+sprintf("%4.2f",avg(model)/avg(obs))+"~C~scatter index="+sprintf("%4.2f",scatterindex) + ", RMSE="+sprintf("%4.2fm",rmse)
     xyres@tiYAxisString       = modelstr + "~C~" + model@long_name + "~C~(meters)"
     xyres@tiXAxisString       = obs_file + "~C~(meters)"
 
