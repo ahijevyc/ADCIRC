@@ -1,6 +1,6 @@
 load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
-load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl"
+load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
 
 ; Compare maximum inundation heights at nearest model point and observed point.
 
@@ -12,6 +12,7 @@ begin
     if(.not.isvar("stormname"))then
         stormname = "IRMA"
     end if
+    stride = 1
     basedir = "/glade/p/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
     obsdir   = basedir + stormname+"/observations/"
@@ -20,6 +21,10 @@ begin
     ; zoom level
     if(.not.isdefined("zoom")) then
         zoom = 1
+    end if
+    ; region
+    if(.not.isdefined("region")) then
+        region = ""
     end if
     if(.not.isvar("minus_astronomical_tide"))then
         minus_astronomical_tide = False
