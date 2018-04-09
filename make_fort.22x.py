@@ -24,8 +24,8 @@ This script produces fort.22x records.  The fort.22x file could be fort.221 or f
 Here is the expected string of commands. You can copy and paste this:
 
 # Main header required at top of fort.22x file.
-echo "                                                       2017090700     2017091212" > fort.221
-echo "                                                       2017090700     2017091212" > fort.222
+echo "                                                       2017091000     2017091300" > fort.221
+echo "                                                       2017091000     2017091300" > fort.222
 
 foreach coarse_grid_file (diag*.nc)
     python /glade/p/work/ahijevyc/ADCIRC/make_fort.22x.py $coarse_grid_file slp >> fort.221
@@ -69,7 +69,12 @@ def print_ncols(a,n=80,fill=1013.,fmt="{:10.4f}"):
 
 
 def get_stuff(file):
+    if file == 'latlon.nc':
+        print 'script cannot process latlon.nc yet (output from convert_mpas)'
+        sys.exit(1)
+
     ncf = Dataset(file,"r")
+
     if hasattr(ncf, u'START_DATE'):
         start_date = getattr(ncf, u'START_DATE')
     if hasattr(ncf, u'config_start_time'):
