@@ -418,7 +418,7 @@ begin
         trackJ0   = (1 - frac) * trackJ(tracki-1)   + frac * trackJ(tracki) + tracklat0
         trackI0   = (1 - frac) * trackI(tracki-1)   + frac * trackI(tracki) + tracklon0
         dist := gc_latlon(res@sfYArray,res@sfXArray,conform(res@sfYArray,tracklat0,-1),conform(res@sfXArray,tracklon0,-1),2,-4)
-        expand_plots_deg = 2. ; expand plot-worthy locations by expand_plots_deg (except for south boundary)
+        expand_plots_deg = 2.5 ; expand plot-worthy locations by expand_plots_deg (except for south boundary)
         if(tracklon0 .lt. (res@mpMinLonF-expand_plots_deg) .or. \
            tracklon0 .gt. (res@mpMaxLonF+expand_plots_deg) .or. \
            tracklat0 .lt.  res@mpMinLatF         .or. \
