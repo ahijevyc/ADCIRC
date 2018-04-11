@@ -2,28 +2,30 @@ load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
 load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
 
-    ; forked from simple_plot.ncl Nov 13 2015
-    ; Updated and adapted for hwt2017 ensemble Feb 2018
+; forked from simple_plot.ncl Nov 13 2015
+; Updated and adapted for hwt2017 ensemble Feb 2018
 
 
 begin
     ; Run first with type="avg"
     if(.not.isvar("type"))then
-        type = "avg"
+        type = "max"
     end if
     if(.not.isvar("modelstr"))then
-        modelstr = "hwt2017"
+        modelstr = "uni"
     end if
     if(.not.isvar("stormname"))then
         stormname = "IRMA"
     end if
     stride = 1
     basedir = "/glade/scratch/ahijevyc/"+modelstr+"/2017090700/" 
+    basedir = "/glade/scratch/mpasrt/"+modelstr+"/201709*/ecic/" 
     outdir  = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
     ; zoom level
     if(.not.isdefined("zoom")) then
         zoom = 1
     end if
+    ; region - not needed. Just use zoom=2 for FloridaSW
     if(.not.isvar("minus_astronomical_tide"))then
         minus_astronomical_tide = False
     end if
@@ -51,13 +53,20 @@ begin
     ; Assign domain min/max lat/lon attributes to res.
     res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
 
-    members    = systemfunc("ls "+basedir+"ens_*/latlon_0.125deg_000km/maxele.63.nc")
-    trackfiles = systemfunc("ls "+basedir+"ens_*/latlon_0.500deg_025km/gfdl_tracker/tracker/IrmaTrack.atcf"  )
+
+    ; hwt2017 ensemble
+    ;members    = systemfunc("ls "+basedir+"ens_*/latlon_0.125deg_000km/maxele.63.nc")
+    ;trackfiles = systemfunc("ls "+basedir+"ens_*/latlon_0.500deg_025km/gfdl_tracker/tracker/IrmaTrack.atcf"  )
+
+    ; uni time-lagged ensemble
+    members    = systemfunc("ls "+basedir+"latlon_0.125deg_000km/maxele.63.nc")
+    trackfiles = systemfunc("ls "+basedir+"latlon_0.500deg_025km/gfdl_tracker/tracker/fort.64.IRMA")
     
-    ; for perturbed ensemble
+    ; perturbed ensemble
     ; ncl 'modelstr="vmax_nws19"' 'type="total"' thresh=1 ../ensemble_avg_plot.ncl
-    members    := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/maxele.63.nc")
-    trackfiles := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/fort.22")
+    ;members    := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/maxele.63.nc")
+    ;trackfiles := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/fort.22")
+
 
     ensemble =  addfiles(members, "r")
     ListSetType(ensemble, "join")
@@ -78,7 +87,15 @@ begin
     res@cnLevelSelectionMode     = "ManualLevels"
     res@cnMinLevelValF           =  1e-9 
     res@cnMaxLevelValF           =  2.
-    res@cnLevelSpacingF          =  0.25
+    res@cnLevelSpacingF          =  0.2
+    if(type.eq."mean")then
+        print("Use avg, not mean.")
+        exit
+    end if
+    if(type.eq."count")then
+        print("Use total, not count.")
+        exit
+    end if
     if(type.eq."avg")then
         x_inundation = dim_avg_n_Wrap(inundation, 0)
     end if
@@ -167,7 +184,7 @@ begin
     end do
     
     txres = True
-    txres@txFontHeightF = 0.015
+    txres@txFontHeightF = 0.01
     txres@txJust        = "BottomLeft"
     gsn_text_ndc(wks, "domain "+tostring(zoom)+"~C~"+systemfunc("date"),0.01,0.01,txres)
 
