@@ -24,12 +24,17 @@ This script produces fort.22x records.  The fort.22x file could be fort.221 or f
 Here is the expected string of commands. You can copy and paste this:
 
 # Main header required at top of fort.22x file.
-echo "                                                       2017091000     2017091300" > fort.221
-echo "                                                       2017091000     2017091300" > fort.222
+foreach f (01 02 03 04 05 06 07 08 09 10)
+    set yyyymmddhh=201709${f}00
+    cd /glade/scratch/mpasrt/uni/$yyyymmddhh/ecic/latlon_0.125deg_000km
+    echo "                                                       $yyyymmddhh     2017091300" > fort.221
+    echo "                                                       $yyyymmddhh     2017091300" > fort.222
 
-foreach coarse_grid_file (diag*.nc)
-    python /glade/p/work/ahijevyc/ADCIRC/make_fort.22x.py $coarse_grid_file slp >> fort.221
-    python /glade/p/work/ahijevyc/ADCIRC/make_fort.22x.py $coarse_grid_file u >> fort.222
+    foreach coarse_grid_file (diag*.nc)
+        python /glade/p/work/ahijevyc/ADCIRC/make_fort.22x.py $coarse_grid_file slp >> fort.221
+        python /glade/p/work/ahijevyc/ADCIRC/make_fort.22x.py $coarse_grid_file u >> fort.222
+    end
+
 end
 
 python /glade/p/work/ahijevyc/ADCIRC/make_fort.22x.py nested_grid_file slp >> fort.223 [optional]
