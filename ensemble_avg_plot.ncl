@@ -59,13 +59,13 @@ begin
     ;trackfiles = systemfunc("ls "+basedir+"ens_*/latlon_0.500deg_025km/gfdl_tracker/tracker/IrmaTrack.atcf"  )
 
     ; uni time-lagged ensemble
-    members    = systemfunc("ls "+basedir+"latlon_0.125deg_000km/maxele.63.nc")
-    trackfiles = systemfunc("ls "+basedir+"latlon_0.500deg_025km/gfdl_tracker/tracker/fort.64.IRMA")
+    ;members    = systemfunc("ls "+basedir+"latlon_0.125deg_000km/maxele.63.nc")
+    ;trackfiles = systemfunc("ls "+basedir+"latlon_0.500deg_025km/gfdl_tracker/tracker/fort.64.IRMA")
     
-    ; perturbed ensemble
+    ; perturbed ensemble (where modelstr="veer", or whatever)
     ; ncl 'modelstr="vmax_nws19"' 'type="total"' thresh=1 ../ensemble_avg_plot.ncl
-    ;members    := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/maxele.63.nc")
-    ;trackfiles := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/fort.22")
+    members    := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/maxele.63.nc")
+    trackfiles := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/fort.22")
 
 
     ensemble =  addfiles(members, "r")
@@ -102,15 +102,27 @@ begin
     if(type.eq."max")then
         x_inundation = dim_max_n_Wrap(inundation, 0)
     end if
+    if(type.eq."prob")then
+        break_thresh = where(inundation.ge.thresh,1,0)
+        wgt = new(dimsizes(members), "float")
+        wgt = 1.
+        x_inundation = 100 * dim_avg_wgt_n_Wrap(break_thresh, wgt, 0, 0) 
+        x_inundation@units     = "%"
+        res@cnMinLevelValF     =   5.
+        res@cnMaxLevelValF     =  95.
+        res@cnLevelSpacingF    =  10.
+    end if
     if(type.eq."total")then
         break_thresh = where(inundation.ge.thresh,1,0)
         wgt = new(dimsizes(members), "float")
         wgt = 1.
         x_inundation = dim_sum_wgt_n_Wrap(break_thresh, wgt, 0, 0)
         x_inundation@units     = "count"
-        res@cnMinLevelValF           =  0.
-        res@cnMaxLevelValF           =  10.
-        res@cnLevelSpacingF          =  1.
+        res@cnMinLevelValF     =  0.
+        res@cnMaxLevelValF     =  dimsizes(members)
+        res@cnLevelSpacingF    =  1.
+        res@lbLabelPosition    = "Center"
+        res@lbLabelAlignment   = "BoxCenters"
     end if
     if(type.eq."min")then
         x_inundation = dim_min_n_Wrap(inundation, 0)
@@ -119,8 +131,6 @@ begin
 
     ; Only retain land values and low-lying land nodes below MSL (sfc_sub_state=1, or "startDry" nodes). 
     x_inundation = mask(x_inundation, f->depth.le.0 .or. (sfc_sub_state.eq.1), True)
-    ; Only retain values above inundation threshold.
-    x_inundation = mask(x_inundation, x_inundation.ge.thresh, True)
     x_inundation@long_name = modelstr+"~C~ensemble " + type + " maximum inundation >="+thresh_string
     if(.not.isatt(x_inundation,"units"))then
         x_inundation@units     = zeta_max@units
