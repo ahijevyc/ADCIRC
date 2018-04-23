@@ -200,9 +200,9 @@ begin
 
     gsn_define_colormap(wks,"WhiteBlueGreenYellowRed")
     res@cnLevelSelectionMode     = "ManualLevels"
-    res@cnMinLevelValF           =  1e-11
-    res@cnMaxLevelValF           =  5.
-    res@cnLevelSpacingF          =  0.5
+    res@cnMinLevelValF           =  1e-09
+    res@cnMaxLevelValF           =  2.0
+    res@cnLevelSpacingF          =  0.2
 
     res@sfXArray                 = f->x
     res@sfYArray                 = f->y
@@ -315,10 +315,10 @@ begin
     xyres@gsnDraw         = False
     xyres@gsnFrame        = False
     ; this controls the size and location of the plot
-    xyres@vpXF            = 0.70
-    xyres@vpWidthF        = 0.20	    
-    xyres@vpYF            = 0.96
-    xyres@vpHeightF       = 0.20 
+    xyres@vpXF            = 0.77
+    xyres@vpWidthF        = 0.16	    
+    xyres@vpYF            = 0.97
+    xyres@vpHeightF       = 0.16 
 
     xyres@gsnMaximize         = False                       ; maximize plot in frame
     xyres@xyMarkLineMode      = "Markers"                   ; choose which have markers
