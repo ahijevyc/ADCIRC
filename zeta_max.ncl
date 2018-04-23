@@ -44,7 +44,6 @@ begin
     end if
 
     outdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
-    outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+".zeta_max.zoom"+zoom+"."+dryland
 
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -56,10 +55,17 @@ begin
     ; Assign domain min/max lat/lon attributes to res.
     res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
 
-    print("opening "+modeldir+"maxele.63.nc")
-    f = addfile(modeldir+"maxele.63.nc","r")
+    f63 = modeldir+"maxele.63.nc"
+    print("opening perturbation zeta_max "+f63)
+    f = addfile(f63,"r")
 
-    k = ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
+    domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
+                   sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF) + region
+    outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + \
+              "."+sprintf("stride%02.0f.",stride)+domainString+".zeta_max"
+    iregion = get_iregion(f, region)
+    k = ind(iregion .and. f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
+    
     model_file = "/tmp/"+stormname+"."+modelstr+".zoom"+zoom+".nc" ; temporary small grid
     system("rm -v "+model_file) 
     g = addfile(model_file,"c")
@@ -70,8 +76,9 @@ begin
     ; get area asssociated with each node (loaded with get_MHHW.ncl)
     g->areaCell = areaCell(k)
     ; sfc_sub_state was defined in get_MHHW.ncl
+    copy_VarCoords(f->depth, sfc_sub_state)
     sfc_sub_state := sfc_sub_state(k)
-    hgt_MHHW := hgt_MHHW(k)
+    hgt_MHHW      := hgt_MHHW(k)
 
     ; Max inundation. You can calculate volume but it doesn't make sense. This is a max over time at each point. 
     ; The inundation is never actually this much at any time.  The max water height is spread over time as the peak washes inland.
@@ -111,6 +118,7 @@ begin
     tracklon = adeck@lon
     tracklat = adeck@lat
 
+    print("reading perturbed file "+model_file)
     f = addfile(model_file,"r")
     nnodes = dimsizes(f->zeta_max) ; number of nodes
     inundation = f->inundation
@@ -121,9 +129,9 @@ begin
     gsn_define_colormap(wks,"WhiteBlueGreenYellowRed")
     res@cnLinesOn                = False
     res@cnLevelSelectionMode     = "ManualLevels"
-    res@cnMinLevelValF           =  1e-11
-    res@cnMaxLevelValF           =  5.
-    res@cnLevelSpacingF          =  0.5
+    res@cnMinLevelValF           =  1e-09
+    res@cnMaxLevelValF           =  2.0
+    res@cnLevelSpacingF          =  0.2
 
     res@sfFirstNodeIndex         = 1
     res@sfXArray                 = f->x
@@ -168,39 +176,21 @@ begin
 
     ; Annotate plot with domain info and creation date.
     txres = True
-    txres@txFontHeightF = 0.015
+    txres@txFontHeightF = 0.01
     txres@txJust        = "BottomLeft"
     gsn_text_ndc(wks, "domain "+tostring(zoom)+"~C~"+systemfunc("date"),0.01,0.01,txres)
 
     ; Draw a dot on each node.
-    noderes                   = True
-    noderes@gsMarkerIndex     = 1
-    noderes@gsMarkerSizeF     = 0.001
-    noderes@gsMarkerOpacityF  = 0.007
+    noderes                  = True
+    noderes@gsMarkerIndex    = 1
+    noderes@gsMarkerSizeF    = 0.001
+    noderes@gsMarkerOpacityF = 0.09
 
-    print("reading "+obs_file)
-    lines := asciiread(obs_file, -1, "string")
-    strs = str_split_csv(lines, ",", 0)
-    tmp :=dimsizes(strs)
-    ncol = tmp(1)
-    ; There are a couple different types of observation files...
-    ; They have different numbers of columns.
-    if(ncol .gt. 5)then
-        stormtide_m = tofloat(strs(1:,10))
-        x = tofloat(strs(1:,22))
-        y = tofloat(strs(1:,21))
-        siteid = strs(skip:,17)
-        confidence = tofloat(strs(1:,24))
-    else
-        stormtide_m = tofloat(strs(:,0))
-        x = tofloat(strs(:,2))
-        y = tofloat(strs(:,1))
-        siteid = strs(:,3)
-        confidence = x
-        confidence = 3
-        gtype = strs(:,4)
-    end if
-
+    ; Get "observations" from control run.
+    print("reading control file "+obs_file)
+    g = addfile(obs_file,"r")
+    obs   = g->inundation
+    model = f->inundation
     obsres = True
     obsres@gsMarkerIndex = 16
     obsres@gsMarkerColor = "dark green"
@@ -211,6 +201,7 @@ begin
 
     if(isdefined("tracklon"))then ; not applicable for NOS_OWI (doesn't use official IKE track)
         storm_track := gsn_add_polyline(wks,map,tracklon,tracklat,lres)
+        draw(map) ; lres@gsnDraw=True did not work
     end if
    
     ; Create array to hold distance errors, one value for each observation.
@@ -288,6 +279,7 @@ begin
         print("obs != model points")
         print(num(.not.ismissing(obs)))
         print(num(.not.ismissing(model)))
+        exit
     end if
     rc = regCoef(obs, model); regCoef and regline return slope of best-fit line
     ; Do we handle missing values in obs and/or model?
@@ -301,10 +293,18 @@ begin
         exit
     end if
     r := sum((obs-avg(obs))*(model-avg(model)))/stddev(obs)/stddev(model)/(rc@nptxy-1)
+    ; Sanity check. Make sure r is unity for control.
+    if(.not.ismissing(str_index_of_substr(modelstr,"control",1)))then
+        if(abs(r-1).gt.0.00001)then
+            print("If this is the control, r should be 1 (within machine precision)")
+            print(r)
+            exit
+        end if
+    end if
     r2 := r^2.
     r2@long_name = "squared Pearson correlation coefficient"
     rmse = sqrt(avg((obs-model)^2))
-    si = stddev(obs-model)/avg(obs)
+    scatterindex = stddev(obs-model)/avg(obs)
     out2->obs = obs
     out2->model = model
     out2->r2 = r2
@@ -313,28 +313,30 @@ begin
     xyres@gsnDraw         = False
     xyres@gsnFrame        = False
     ; this controls the size and location of the plot
-    xyres@vpXF            = 0.70
-    xyres@vpWidthF        = 0.20	    
-    xyres@vpYF            = 0.96
-    xyres@vpHeightF       = 0.20 
+    xyres@vpXF            = 0.77
+    xyres@vpWidthF        = 0.16	    
+    xyres@vpYF            = 0.97
+    xyres@vpHeightF       = 0.16 
 
-    xyres@gsnMaximize         = False                  ; maximize plot in frame
-    xyres@xyMarkLineMode      = "Markers"  ; choose which have markers
-    xyres@xyMarker            = obsres@gsMarkerIndex               ; choose type of marker 
+    xyres@gsnMaximize         = False                       ; maximize plot in frame
+    xyres@xyMarkLineMode      = "Markers"                   ; choose which have markers
+    xyres@xyMarker            = obsres@gsMarkerIndex        ; choose type of marker 
     xyres@xyMarkerColor       = "dark green"                ; Marker color
-    xyres@xyMarkerSizeF       = obsres@gsMarkerSizeF         ; Marker size (default 0.01)
+    xyres@xyMarkerSizeF       = 0.002; obsres@gsMarkerSizeF ; Marker size (default 0.01)
     xyres@xyMarkerThicknessF  = obsres@gsMarkerThicknessF 
     xyres@xyDashPattern       = "Solid"               
     xyres@xyLineThicknessF    = 1 
     xyres@xyLineColor         = xyres@xyMarkerColor
     xyres@xyLabelMode         = "Custom"
     xyres@gsnShape            = True
-    xyres@trYMinF             = 0.
-    xyres@trXMinF             = 0.
-    xyres@trYMaxF             = 8.
-    xyres@trXMaxF             = 8.
+    ; can have negative "storm" surge
+    xyres@trYMinF             = -0.5
+    xyres@trXMinF             = -0.5
+    xyres@trYMaxF             = 5.
+    xyres@trXMaxF             = 5.
 
-    xyres@tiMainString        = "n="+sprintf("%.0f",rc@nptxy)+", r~S~2~N~="+sprintf("%4.2f",r2)+", multiplic. bias="+sprintf("%4.2f",avg(model)/avg(obs))+"~C~scatter index="+sprintf("%4.2f",si) + ", RMSE="+sprintf("%4.2fm",rmse)
+
+    xyres@tiMainString        = "n="+sprintf("%.0f",rc@nptxy)+", r~S~2~N~="+sprintf("%4.2f",r2)+", multiplic. bias="+sprintf("%4.2f",avg(model)/avg(obs))+"~C~scatter index="+sprintf("%4.2f",scatterindex) + ", RMSE="+sprintf("%4.2fm",rmse)
     xyres@tiYAxisString       = modelstr + "~C~" + zeta_max@long_name + "~C~(meters)"
     xyres@tiXAxisString       = obs_file + "~C~(meters)"
 
@@ -397,4 +399,3 @@ begin
     print("finished "+outfile)
     
 end
-
