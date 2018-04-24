@@ -293,7 +293,11 @@ begin
         print("finished "+outfile)
         exit
     end if
-    r := sum((obs-avg(obs))*(model-avg(model)))/stddev(obs)/stddev(model)/(rc@nptxy-1)
+    if(stddev(model).gt.0.)then
+        r := sum((obs-avg(obs))*(model-avg(model)))/stddev(obs)/stddev(model)/(rc@nptxy-1)
+    else
+        r := new(1,float)
+    end if
     ; Sanity check. Make sure r is unity for control.
     if(.not.ismissing(str_index_of_substr(modelstr,"control",1)))then
         if(abs(r-1).gt.0.00001)then
