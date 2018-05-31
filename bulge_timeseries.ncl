@@ -246,7 +246,8 @@ begin
     time_axis_labels(f->time, sres, resTick)
  
     control_str = "control"
-    if(isStrSubset(modelstr,"_nws19").or.isStrSubset(modelstr,"coldstart"))
+    if(isStrSubset(modelstr,"_nws19").or.isStrSubset(modelstr,"coldstart")\
+        .or.isStrSubset(modelstr,".ecic").or.isStrSubset(modelstr,"ecmwf"))
         control_str = "control_nws19"
     end if
     control_timeseries_file := str_sub_str(timeseries_file,modelstr,control_str)
@@ -259,7 +260,7 @@ begin
         if(fileexists(control_timeseries_file))then
             c = addfile(control_timeseries_file,"r")
         else
-            print("didn't find "+control_timeseries_file+". Run with modelstr = control first.")
+            print("didn't find "+control_timeseries_file+". Run with modelstr = "+control_str+" first.")
             exit
         end if
     end if
@@ -440,6 +441,14 @@ begin
         else
             ; inundation is water height minus surface height (depth is negative surface height)
             inundation = zeta1 + depth
+            ; set justZeta to true if you just want water height
+            justZeta = False
+            if(justZeta)then
+                inundation = zeta1
+                res@cnMinLevelValF           =  -2.0
+                res@cnMaxLevelValF           =   2.0
+                res@cnLevelSpacingF          =   0.25
+            end if
             copy_VarMeta(zeta1, inundation)
             inundation@long_name = "depth of water over normally dry land ("+dryland+">=0)"
         end if
@@ -451,8 +460,10 @@ begin
         ; Mask ocean
         ; In other words, mask all nodes with depth>0, but not start-dry nodes.
         ; sfc_sub_state is missing or 1. 1 is land that starts dry but depth>0 (is below MSL). 
-        inundation = mask(inundation, depth.le.0 .or. sfc_sub_state.eq.1, True)
-        print(num(.not.ismissing(inundation))+" inundated (=>0) nodes")
+        if(isvar("justZeta").and..not.justZeta)then
+            inundation = mask(inundation, depth.le.0 .or. sfc_sub_state.eq.1, True)
+            print(num(.not.ismissing(inundation))+" inundated (=>0) nodes")
+        end if
 
         if(dryland.eq."MHHW")then
             ; Don't consider nodes below the mean higher high water mark as normally dry. Mask them.
@@ -584,6 +595,7 @@ begin
         ; check for 2 unique values. avoid error about zero width y axis
         if (count_unique_values(y1).ge.2)then
             ; Important to use := with xy_plot or memory use will grow to > 5GB.
+            ; An error about different sized arrays may require deleting the *timeseries.nc file and rerunning.
             xy_plot := gsn_csm_xy(wks,f->time,y1,sres)
             draw(xy_plot)
             delete(xy_plot)
