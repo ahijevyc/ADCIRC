@@ -9,17 +9,17 @@ load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_
 begin
     ; Run first with type="avg"
     if(.not.isvar("type"))then
-        type = "max"
+        type = "prob"
     end if
     if(.not.isvar("modelstr"))then
-        modelstr = "uni"
+        modelstr = "ECMWF"
     end if
     if(.not.isvar("stormname"))then
         stormname = "IRMA"
     end if
     stride = 1
-    basedir = "/glade/scratch/ahijevyc/"+modelstr+"/2017090700/" 
-    basedir = "/glade/scratch/mpasrt/"+modelstr+"/201709*/ecic/" 
+    basedir = "/glade/scratch/ahijevyc/"+modelstr+"/2017090600/" 
+    ;basedir = "/glade/scratch/mpasrt/"+modelstr+"/201709*/ecic/" 
     outdir  = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
     ; zoom level
     if(.not.isdefined("zoom")) then
@@ -54,6 +54,10 @@ begin
     res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
 
 
+    ; ECMWF ensemble
+    members    = systemfunc("ls "+basedir+"ens_*/maxele.63.nc")
+    trackfiles = systemfunc("ls "+basedir+"ens_*/figuregen/IrmaTrack.atcf"  )
+
     ; hwt2017 ensemble
     ;members    = systemfunc("ls "+basedir+"ens_*/latlon_0.125deg_000km/maxele.63.nc")
     ;trackfiles = systemfunc("ls "+basedir+"ens_*/latlon_0.500deg_025km/gfdl_tracker/tracker/IrmaTrack.atcf"  )
@@ -64,8 +68,8 @@ begin
     
     ; perturbed ensemble (where modelstr="veer", or whatever)
     ; ncl 'modelstr="vmax_nws19"' 'type="total"' thresh=1 ../ensemble_avg_plot.ncl
-    members    := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/maxele.63.nc")
-    trackfiles := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/fort.22")
+    ;members    := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/maxele.63.nc")
+    ;trackfiles := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/fort.22")
 
 
     ensemble =  addfiles(members, "r")
@@ -188,7 +192,7 @@ begin
             adeck := read_atcf(trackfile)
             tracklon := adeck@lon
             tracklat := adeck@lat
-            lres@gsLineLabelString = modelstr
+            lres@gsLineLabelString = integer(modelstr)
             gsn_polyline(wks,map,tracklon,tracklat,lres)
         end if
     end do
