@@ -1,9 +1,9 @@
 load "$NCARG_ROOT/lib/ncarg/nclscripts/esmf/ESMF_regridding.ncl"
 load "$NCARG_ROOT/lib/ncarg/nclscripts/contrib/cd_string.ncl"
-load "/glade/p/work/ahijevyc/ncl/derived_fields.ncl"
-load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
-load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
-load "/glade/p/work/ahijevyc/ncl/CreateTracks.ncl"
+load "/glade/work/ahijevyc/ncl/derived_fields.ncl"
+load "/glade/work/ahijevyc/ncl/get_field_res.ncl"
+load "/glade/work/ahijevyc/ncl/read_atcf.ncl"
+load "/glade/work/ahijevyc/ncl/CreateTracks.ncl"
 
 ;==========================================================================
 
@@ -18,8 +18,8 @@ begin
     mesh = "nos"
 
 	; Directory with esmf regrid files for this particular mesh 
-	meshdir = "/glade/p/work/ahijevyc/ADCIRC/esmf_regrid."+mesh+"/"
-	diri = "/glade/p/work/ahijevyc/ADCIRC/IRMA/control/"
+	meshdir = "/glade/work/ahijevyc/ADCIRC/esmf_regrid."+mesh+"/"
+	diri = "/glade/work/ahijevyc/ADCIRC/IRMA/control/"
 	diri = "/glade/scratch/mpasrt/uni/2017090600/ecic/latlon_0.125deg_025km/"
 
 	slpfile = diri+"fort.73.nc"

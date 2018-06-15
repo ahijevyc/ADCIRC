@@ -1,13 +1,13 @@
 load "$NCARG_ROOT/lib/ncarg/nclscripts/contrib/time_axis_labels.ncl"
 load "$NCARG_ROOT/lib/ncarg/nclscripts/contrib/cd_string.ncl"
-load "/glade/p/work/ahijevyc/ncl/cd_inv_string.ncl"
-load "/glade/p/work/ahijevyc/ncl/date_str.ncl"
-load "/glade/p/work/ahijevyc/ncl/get_length_scale.ncl"
-load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
-load "/glade/p/work/ahijevyc/ncl/CreateTracks.ncl"
-load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
-load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
-load "/glade/p/work/ahijevyc/ADCIRC/minus_astronomical_tide.ncl"
+load "/glade/work/ahijevyc/ncl/cd_inv_string.ncl"
+load "/glade/work/ahijevyc/ncl/date_str.ncl"
+load "/glade/work/ahijevyc/ncl/get_length_scale.ncl"
+load "/glade/work/ahijevyc/ncl/get_field_res.ncl"
+load "/glade/work/ahijevyc/ncl/CreateTracks.ncl"
+load "/glade/work/ahijevyc/ncl/read_atcf.ncl"
+load "/glade/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
+load "/glade/work/ahijevyc/ADCIRC/minus_astronomical_tide.ncl"
 
 begin
 
@@ -23,7 +23,7 @@ begin
             stride=10
         end if
     end if
-    basedir = "/glade/p/work/ahijevyc/ADCIRC/"
+    basedir = "/glade/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
 
     ; If True, plot only one frame (default False)
@@ -56,7 +56,7 @@ begin
         exit
     end if
 
-    outdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
+    outdir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
 
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

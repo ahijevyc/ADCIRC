@@ -1,6 +1,6 @@
-load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
-load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
-load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
+load "/glade/work/ahijevyc/ncl/get_field_res.ncl"
+load "/glade/work/ahijevyc/ncl/read_atcf.ncl"
+load "/glade/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
 
 ; Compare maximum inundation heights at nearest model point and observed point.
 
@@ -13,7 +13,7 @@ begin
         stormname = "IRMA"
     end if
     stride = 1
-    basedir = "/glade/p/work/ahijevyc/ADCIRC/"
+    basedir = "/glade/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
     obsdir   = basedir + stormname+"/observations/"
     ; ike_SSS_high_water.csv created by get_USGS_high_water.csh from pubs.usgs.gov/of/2008/1365/downloads
@@ -43,7 +43,7 @@ begin
         exit
     end if
 
-    outdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
+    outdir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
 
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

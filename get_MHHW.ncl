@@ -6,7 +6,7 @@
 
     ; Get node height relative to MHHW mark (hgt_MHHW)
     ; David Ahijevych created this file with vdatum June 2017.
-    MHHW_file= "/glade/p/work/ahijevyc/ADCIRC/lonlatLMSL.MHHW.nc"
+    MHHW_file= "/glade/work/ahijevyc/ADCIRC/lonlatLMSL.MHHW.nc"
     MHHW_fh = addfile(MHHW_file, "r")
     ; Create a new variable to hold node height relative to mean higher high water.
     hgt_MHHW = MHHW_fh->mhhw
@@ -14,7 +14,7 @@
     delete(MHHW_fh)
 
     ; Get area asssociated with each node (file created by Michael Duda)
-    areaCell_source = "/glade/p/work/ahijevyc/ADCIRC/duda/NOS_cells.nc"
+    areaCell_source = "/glade/work/ahijevyc/ADCIRC/duda/NOS_cells.nc"
     area_fh = addfile(areaCell_source, "r")
     Re = 6371.; radius of Earth in km
     areaCell = area_fh->areaCell
@@ -32,7 +32,7 @@
     ; They are actually contained in the fort.13 file, but that file has other attributes,
     ; so it's hard to parse.  So Kate pulled that chunk of data out to this text file.  
     ; The file lists the node number, which must be cross referenced with index of lat/lon vars or fort.14 file. 
-    sfc_sub_state_file = "/glade/p/work/ahijevyc/ADCIRC/surface_submergence_state_14040.txt"
+    sfc_sub_state_file = "/glade/work/ahijevyc/ADCIRC/surface_submergence_state_14040.txt"
     lines = asciiread(sfc_sub_state_file, -1, "integer")
     inodes = lines(::2) ; asciiread reads 2 columns text into 1-D array; extract 1st column by taking every other one.
     sfc_sub_state = new(dimsizes(areaCell), "integer")

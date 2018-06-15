@@ -1,6 +1,6 @@
-load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
-load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
-load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
+load "/glade/work/ahijevyc/ncl/get_field_res.ncl"
+load "/glade/work/ahijevyc/ncl/read_atcf.ncl"
+load "/glade/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
 
 ; forked from simple_plot.ncl Nov 13 2015
 ; Updated and adapted for hwt2017 ensemble Feb 2018
@@ -12,15 +12,15 @@ begin
         type = "prob"
     end if
     if(.not.isvar("modelstr"))then
-        modelstr = "ECMWF"
+        modelstr = "ECMWF/2017090600"
     end if
     if(.not.isvar("stormname"))then
         stormname = "IRMA"
     end if
     stride = 1
-    basedir = "/glade/scratch/ahijevyc/"+modelstr+"/2017090600/" 
+    basedir = "/glade/scratch/ahijevyc/"+modelstr+"/" 
     ;basedir = "/glade/scratch/mpasrt/"+modelstr+"/201709*/ecic/" 
-    outdir  = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
+    outdir  = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
     ; zoom level
     if(.not.isdefined("zoom")) then
         zoom = 1
@@ -68,8 +68,8 @@ begin
     
     ; perturbed ensemble (where modelstr="veer", or whatever)
     ; ncl 'modelstr="vmax_nws19"' 'type="total"' thresh=1 ../ensemble_avg_plot.ncl
-    ;members    := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/maxele.63.nc")
-    ;trackfiles := systemfunc("ls /glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/fort.22")
+    ;members    := systemfunc("ls /glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/maxele.63.nc")
+    ;trackfiles := systemfunc("ls /glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/fort.22")
 
 
     ensemble =  addfiles(members, "r")
@@ -78,7 +78,7 @@ begin
 
     domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
                    sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF)
-    outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + \
+    outfile = outdir+str_sub_str(modelstr,"/",".")+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + \
               "."+sprintf("stride%02.0f.",stride)+domainString+"."+type
 
     zeta_max   = ensemble[:]->zeta_max
@@ -185,14 +185,14 @@ begin
     do iveer=0,dimsizes(trackfiles)-1  
         trackfile = trackfiles(iveer)
         iens = str_index_of_substr(trackfile,"/ens_",1)
-        modelstr = str_get_cols(trackfile,iens+1,iens+6)
-        modelstr = str_sub_str(modelstr,"/","") ; Remove slashes
+        ens = str_get_cols(trackfile,iens+5,iens+6)
+        ens = str_sub_str(ens,"/","") ; Remove slashes
         if(fileexists(trackfile))then
             print("reading "+trackfile)
             adeck := read_atcf(trackfile)
             tracklon := adeck@lon
             tracklat := adeck@lat
-            lres@gsLineLabelString = integer(modelstr)
+            lres@gsLineLabelString = ens
             gsn_polyline(wks,map,tracklon,tracklat,lres)
         end if
     end do

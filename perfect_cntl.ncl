@@ -1,7 +1,7 @@
-load "/glade/p/work/ahijevyc/ncl/get_field_res.ncl"
-load "/glade/p/work/ahijevyc/ncl/read_atcf.ncl"
-load "/glade/p/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
-load "/glade/p/work/ahijevyc/ADCIRC/minus_astronomical_tide.ncl"
+load "/glade/work/ahijevyc/ncl/get_field_res.ncl"
+load "/glade/work/ahijevyc/ncl/read_atcf.ncl"
+load "/glade/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
+load "/glade/work/ahijevyc/ADCIRC/minus_astronomical_tide.ncl"
 
 ; Compare maximum inundation depth in control and perturbed runs.
 
@@ -28,7 +28,7 @@ begin
         stormname = "IRMA"
     end if
     stride = 1
-    basedir = "/glade/p/work/ahijevyc/ADCIRC/"
+    basedir = "/glade/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
     control_str = "control"
     if(isStrSubset(modelstr,"_nws19").or.isStrSubset(modelstr,"coldstart"))
@@ -62,7 +62,7 @@ begin
         exit
     end if
 
-    outdir = "/glade/p/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
+    outdir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
 
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
