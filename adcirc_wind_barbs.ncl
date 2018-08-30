@@ -21,6 +21,7 @@ begin
 	meshdir = "/glade/work/ahijevyc/ADCIRC/esmf_regrid."+mesh+"/"
 	diri = "/glade/work/ahijevyc/ADCIRC/IRMA/control/"
 	diri = "/glade/scratch/mpasrt/uni/2017090600/ecic/latlon_0.125deg_025km/"
+	diri = "/glade/scratch/ahijevyc/kowaleski/2017090512/"
 
 	slpfile = diri+"fort.73.nc"
 
@@ -33,7 +34,10 @@ begin
     ;print(cd_string(time, "%Y%N%D %H%M"))
     iTime = 119 ; good for control init 2017090718 
     iTime = 119-42 ; good for init 2017090600 valid 201709100600 fhr=102
-    print(cd_string(time(iTime), "%Y%N%D %H%M"))
+    iTime = 101
+    stime = cd_string(time(iTime), "%Y%N%D %H%M")
+    print(stime)
+    title = stime
 	nCells         = dimsizes(lon)
 	print("done reading lat/lon info")
 
@@ -47,10 +51,10 @@ begin
 	res@mpProjection        = "CylindricalEquidistant"
 	res@mpDataBaseVersion   = "MediumRes" 
 	res@mpLimitMode = "LatLon"
-	res@mpMinLatF=  20.2
-	res@mpMaxLatF=  28.2
-	res@mpMinLonF= -87.
-	res@mpMaxLonF= -74.9
+	res@mpMinLatF=  20.
+	res@mpMaxLatF=  30.5
+	res@mpMinLonF= -89.
+	res@mpMaxLonF= -75.
 	; set sfXArray and sfYarray (1-D lats and lons needed for plotting a mesh)
 	res@sfXArray = f73->x
 	res@sfYArray = f73->y
@@ -249,8 +253,9 @@ begin
 
 	; MSLP contours
     sres = get_res_cn("", "mslp", air_pressure)
-    ;plot_ov = gsn_csm_contour(wks,air_pressure(iTime,:),sres)
-    ;overlay(plot, plot_ov)
+    sres@tiMainString = title
+    plot_ov = gsn_csm_contour(wks,air_pressure(iTime,:),sres)
+    overlay(plot, plot_ov)
 
     if(False)then
         trackfile = diri + "fort.22"
