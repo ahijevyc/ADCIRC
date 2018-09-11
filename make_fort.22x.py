@@ -1,5 +1,3 @@
-#!/bin/env python
-
 from netCDF4 import Dataset, num2date
 import numpy as np
 import glob,sys,datetime
@@ -16,7 +14,7 @@ For ECMWF:
     grib2 files are already on lat/lon grid.
     Just ncl_convert2nc
 For WRF: 
-    ncl /glade/p/work/ahijevyc/ncl/interpolateWRF.ncl
+    ncl /glade/work/ahijevyc/ncl/interpolateWRF.ncl
     Produces files like "wrfout_"+grid+"_????-??-??_??:??:??_latlon.nc"
 For MPAS: 
     ~ahijevyc/bin_cheyenne/mpas_to_latlon
@@ -28,24 +26,26 @@ This script produces fort.22x records.  The fort.22x file could be fort.221 or f
 
 Here is the expected string of commands. You can copy and paste this:
 
+# If you have a nested grid (below), change first line of fort.22 from "1" to "2".
+
 # Main header required at top of fort.22x file.
-foreach f (01 02 03 04 05 06 07 08 09 10)
-    set yyyymmddhh=201709${f}00
-    cd /glade/scratch/mpasrt/uni/$yyyymmddhh/ecic/latlon_0.125deg_000km
-    echo "                                                       $yyyymmddhh     2017091300" > fort.221
-    echo "                                                       $yyyymmddhh     2017091300" > fort.222
 
-    foreach coarse_grid_file (diag*.nc)
-        python /glade/p/work/ahijevyc/ADCIRC/make_fort.22x.py $coarse_grid_file slp >> fort.221
-        python /glade/p/work/ahijevyc/ADCIRC/make_fort.22x.py $coarse_grid_file u >> fort.222
-    end
+echo "                                                       2017090600     2017091400" > fort.221
+echo "                                                       2017090600     2017091400" > fort.222
+echo "                                                       2017090600     2017091400" > fort.223
+echo "                                                       2017090600     2017091400" > fort.224
 
+foreach coarse_grid_file (E01/E01*d02*.nc)
+    python /glade/work/ahijevyc/ADCIRC/make_fort.22x.py $coarse_grid_file slp >> fort.221
+    python /glade/work/ahijevyc/ADCIRC/make_fort.22x.py $coarse_grid_file u >> fort.222
 end
 
-python /glade/p/work/ahijevyc/ADCIRC/make_fort.22x.py nested_grid_file slp >> fort.223 [optional]
-python /glade/p/work/ahijevyc/ADCIRC/make_fort.22x.py nested_grid_file u >> fort.224 [optional]
+foreach nested_grid_file (E01/E01*d03*.nc)
+    python /glade/work/ahijevyc/ADCIRC/make_fort.22x.py $nested_grid_file slp >> fort.223
+    python /glade/work/ahijevyc/ADCIRC/make_fort.22x.py $nested_grid_file u >> fort.224
+end
 
-where d01 is the big domain and d02 is the nested domain.
+# where d01 is the big domain and d02 is the nested domain.
 
 """
 
@@ -93,6 +93,10 @@ def get_stuff(file):
         start_date = getattr(ncf, u'START_DATE')
     if hasattr(ncf, u'config_start_time'):
         start_date = getattr(ncf, u'config_start_time')
+    if 'west_east' in ncf.variables:
+        lon = ncf.variables['west_east'][:]
+    if 'south_north' in ncf.variables:
+        lat = ncf.variables['south_north'][:]
     if 'lon' in ncf.variables:
         lon = ncf.variables['lon'][:]
         lat = ncf.variables['lat'][:]
@@ -103,14 +107,14 @@ def get_stuff(file):
     if "10u_P1_L103_GLL0" in ncf.variables:
         sdate = ncf.variables["10u_P1_L103_GLL0"].initial_time
         start_date = sdate[6:10]+"/"+sdate[0:5]+" "+sdate[12:14]
-        u10s = ncf.variables['10u_P1_L103_GLL0'][:]
-        v10s = ncf.variables['10v_P1_L103_GLL0'][:]
-        slps = ncf.variables['msl_P1_L101_GLL0'][:]
+        u10 = ncf.variables['10u_P1_L103_GLL0'][:]
+        v10 = ncf.variables['10v_P1_L103_GLL0'][:]
+        slp = ncf.variables['msl_P1_L101_GLL0'][:]
         lon = ncf.variables['lon_0'][:]
         lat = ncf.variables['lat_0'][:]
-        u10s = roll(u10s,lon)
-        v10s = roll(v10s,lon)
-        slps = roll(slps,lon)
+        u10 = roll(u10,lon)
+        v10 = roll(v10,lon)
+        slp = roll(slp,lon)
         lon  = roll(lon,lon)# make sure you roll longitude last!
 
 
@@ -122,19 +126,17 @@ def get_stuff(file):
         valid_time = valid_time + datetime.timedelta(seconds=dsec)
         valid_times = [valid_time]
         slp = ncf.variables['mslp'][:]
-        slps = [slp]
     if 'slp' in ncf.variables and 'Time' in ncf.variables:
         # valid time should use Time attribute instead of assuming hours since 1901-1-1
         valid_time = datetime.datetime(1901,1,1,0) + datetime.timedelta(hours=float(ncf.variables['Time'][:]))
         valid_times = [valid_time]
         slp = ncf.variables['slp'][:]
-        slps = [slp]
     if 'forecast_time0' in ncf.variables:
         fhrs = ncf.variables['forecast_time0'][:]
         valid_times = [datetime.datetime.strptime(yyyymmddhh, '%Y%m%d%H') + datetime.timedelta(hours=int(x)) for x in fhrs]
 
-    if np.max(slps) > 100000: # Convert Pa to hPa
-        slps = slps/100.
+    if np.ma.max(slp) > 100000: # Convert Pa to hPa
+        slp = slp/100.
      
     ncf.close()
 
@@ -144,11 +146,11 @@ def get_stuff(file):
     if lat[1] - lat[0] < 0:
         # flip latitude dimension
         lat  = np.flip(lat, 0)
-        u10s = np.flip(u10s,1)
-        v10s = np.flip(v10s,1)
-        slps = np.flip(slps,1)
+        u10 = np.flip(u10,1)
+        v10 = np.flip(v10,1)
+        slp = np.flip(slp,1)
 
-    return yyyymmddhh, valid_times, lon, lat, u10s, v10s, slps
+    return yyyymmddhh, valid_times, lon, lat, u10, v10, slp
 
 yyyymmddhh, valid_times, lon, lat, u10s, v10s, slps = get_stuff(file)
 
@@ -159,10 +161,29 @@ dy = lat[1] - lat[0]
 
 # RECORD HEADER
 # Does Dt change? Documentation says it is the start time, but Kate says yes.
-for valid_time, u10, v10, slp in zip(valid_times,u10s,v10s,slps):
-    print '%5s%4d%6s%4d%3s%6.4f%3s%6.4f%6s%8.3f%6s%8.3f%3s%12s' % ("iLat=",nlat,"iLong=",nlon,"DX=",dx,"DY=",dy,"SWLat=",lat[0],"SWlon=",lon[0],"Dt=",valid_time.strftime('%Y%m%d%H%M'))
+def f22xrec_header(nlat,nlon,dx,dy,lat,lon,valid_time):
+    print '%5s%4d%6s%4d%3s%6.4f%3s%6.4f%6s%8.3f%6s%8.3f%3s%12s' % (
+                "iLat=",nlat,"iLong=",nlon,
+                "DX=",dx,"DY=",dy,
+                "SWLat=",lat[0],"SWlon=",lon[0],
+                "Dt=",valid_time.strftime('%Y%m%d%H%M')
+            )
+
+# Come up with better way of dealing with input netCDF files that have just one time or
+# lotza times. 
+
+def do_print_ncols(field,u10,v10,slp):
     if field == "u":
         print_ncols(u10,fill=0.,fmt="{:10.5f}")
         print_ncols(v10,fill=0.,fmt="{:10.5f}")
     if field == "slp":
         print_ncols(slp,fill=1013.,fmt="{:10.4f}")
+
+# Deal with time dimension
+if len(valid_times) > 1:
+    for valid_time, u10, v10, slp in zip(valid_times,u10s,v10s,slps):
+        f22xrec_header(nlat,nlon,dx,dy,lat,lon,valid_time)
+        do_print_ncols(field,u10,v10,slp)
+else:
+    f22xrec_header(nlat,nlon,dx,dy,lat,lon,valid_times[0])
+    do_print_ncols(field,u10s,v10s,slps)
