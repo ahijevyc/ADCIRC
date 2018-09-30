@@ -26,6 +26,7 @@ begin
         zoom = 1
     end if
     ; region - not needed. Just use zoom=2 for FloridaSW
+    ;                           use zoom=5 for Tampa
     if(.not.isvar("minus_astronomical_tide"))then
         minus_astronomical_tide = False
     end if
@@ -176,8 +177,8 @@ begin
     res@mpPerimOn               = False
     res@pmTickMarkDisplayMode   = "Always"    ; Turn on map tickmarks.
     lres                        = True
-    lres@gsLineThicknessF       =  2.
-    lres@gsLineLabelFontHeightF = 0.009
+    lres@gsLineThicknessF       =  1.
+    lres@gsLineLabelFontHeightF = 0.007
 
     map := gsn_csm_contour_map(wks,x_inundation,res)
 
