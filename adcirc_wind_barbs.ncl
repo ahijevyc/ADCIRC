@@ -21,7 +21,7 @@ begin
 	meshdir = "/glade/work/ahijevyc/ADCIRC/esmf_regrid."+mesh+"/"
 	diri = "/glade/work/ahijevyc/ADCIRC/IRMA/control/"
 	diri = "/glade/scratch/mpasrt/uni/2017090600/ecic/latlon_0.125deg_025km/"
-	diri = "/glade/scratch/ahijevyc/kowaleski/2017090512/"
+	diri = "/glade/scratch/ahijevyc/kowaleski/2017090512/9km3km/"
 
 	slpfile = diri+"fort.73.nc"
 
@@ -34,7 +34,6 @@ begin
     ;print(cd_string(time, "%Y%N%D %H%M"))
     iTime = 119 ; good for control init 2017090718 
     iTime = 119-42 ; good for init 2017090600 valid 201709100600 fhr=102
-    iTime = 101
     stime = cd_string(time(iTime), "%Y%N%D %H%M")
     print(stime)
     title = stime
