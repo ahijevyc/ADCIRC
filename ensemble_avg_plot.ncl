@@ -12,14 +12,14 @@ begin
         type = "prob"
     end if
     if(.not.isvar("modelstr"))then
-        modelstr = "ECMWF/2017090600"
+        modelstr = "ECMWF.2017090612"
     end if
     if(.not.isvar("stormname"))then
         stormname = "IRMA"
     end if
     stride = 1
-    basedir = "/glade/scratch/ahijevyc/"+modelstr+"/" 
-    ;basedir = "/glade/scratch/mpasrt/"+modelstr+"/201709*/ecic/" 
+    ; basedir used to find maxele.63.nc and fort.22 files. 
+    basedir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+".ens_*/"
     outdir  = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
     ; zoom level
     if(.not.isdefined("zoom")) then
@@ -56,8 +56,8 @@ begin
 
 
     ; ECMWF ensemble
-    members    = systemfunc("ls "+basedir+"ens_*/maxele.63.nc")
-    trackfiles = systemfunc("ls "+basedir+"ens_*/figuregen/IrmaTrack.atcf"  )
+    members    = systemfunc("ls "+basedir+"maxele.63.nc")
+    trackfiles = systemfunc("ls "+basedir+"fort.22"  )
 
     ; hwt2017 ensemble
     ;members    = systemfunc("ls "+basedir+"ens_*/latlon_0.125deg_000km/maxele.63.nc")
