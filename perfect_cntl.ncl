@@ -24,14 +24,23 @@ begin
     if(.not.isvar("modelstr"))then
         modelstr = "control"
     end if
-    if(.not.isvar("stormname"))then
+    if(isStrSubset(modelstr,"/"))then
+        print("modelstr can't have subdirectories. make modelstr a long string with parts instead")
+        exit
+    end if
+
+    if(.not.isvar("stormname"))
         stormname = "IRMA"
     end if
     stride = 1
     basedir = "/glade/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
     control_str = "control"
-    if(isStrSubset(modelstr,"_nws19").or.isStrSubset(modelstr,"coldstart"))
+    ; if you change this here, change in bulge_timeseries.ncl also.
+    if(isStrSubset(modelstr,"_nws19").or.isStrSubset(modelstr,"coldstart")\
+        .or.isStrSubset(modelstr,".ecic")\
+        .or.isStrSubset(modelstr,"EPS")\
+        .or.isStrSubset(modelstr,"ECMWF"))
         control_str = "control_nws19"
     end if
     obsdir   = str_sub_str(modeldir,modelstr,control_str)
