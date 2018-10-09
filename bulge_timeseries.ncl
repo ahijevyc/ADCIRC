@@ -14,7 +14,12 @@ begin
     if(.not.isvar("modelstr"))then
         modelstr = "control"
     end if
-    if(.not.isvar("stormname"))then
+    if(isStrSubset(modelstr,"/"))then
+        print("modelstr can't have subdirectories. make modelstr a long string with parts instead")
+        exit
+    end if
+
+    if(.not.isvar("stormname"))
         stormname = "IRMA"
     end if
     if(.not.isvar("stride"))then
@@ -25,6 +30,14 @@ begin
     end if
     basedir = "/glade/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
+    control_str = "control"
+    ; if you change this here, change in perfect_cntrl.ncl also.
+    if(isStrSubset(modelstr,"_nws19").or.isStrSubset(modelstr,"coldstart")\
+        .or.isStrSubset(modelstr,".ecic")\
+        .or.isStrSubset(modelstr,"EPS")\
+        .or.isStrSubset(modelstr,"ECMWF"))
+        control_str = "control_nws19"
+    end if
 
     ; If True, plot only one frame (default False)
     if(.not.isdefined("one_frame")) then
@@ -188,8 +201,8 @@ begin
     res@gsnFrame                 = False
     res@cnLevelSelectionMode     = "ManualLevels"
     res@cnMinLevelValF           =  1e-11
-    res@cnMaxLevelValF           =  5.
-    res@cnLevelSpacingF          =  0.5
+    res@cnMaxLevelValF           =  2.0
+    res@cnLevelSpacingF          =  0.2
     ; Tricky color table
     ; get_field_res(wks,'inundation',hgt_MHHW)
 
@@ -245,11 +258,6 @@ begin
     resTick@ttmMinorStride = 12
     time_axis_labels(f->time, sres, resTick)
  
-    control_str = "control"
-    if(isStrSubset(modelstr,"_nws19").or.isStrSubset(modelstr,"coldstart")\
-        .or.isStrSubset(modelstr,".ecic").or.isStrSubset(modelstr,"ecmwf"))
-        control_str = "control_nws19"
-    end if
     control_timeseries_file := str_sub_str(timeseries_file,modelstr,control_str)
    
     ; If you are analyzing something other than control,
@@ -400,15 +408,16 @@ begin
 
         ; Get current lat/lon of storm, interpolating fort.22
         ; Find first track time later than frame time, tracki
-        tracki = min(ind(tracktime .ge. f->time(itime)))
-
-        if(rad(tracki).ne.34.and.rad(tracki).ne.0)then
-            ; sanity check; tracki should correspond to a rad=34kt line and tracki-1 to a 34, 50, or 64kt line.
-            ; This was true for Ike, but not Charley, in Charley there are 0kt lines (with no accompanying 34kt lines).
-            print("unexpected wind intensity threshold in fort.22 file")
-            print(tostring(rad(tracki)))
-            print(date_str(tracktime(tracki)))
-            exit
+        tracki = min(ind(tracktime .gt. f->time(itime))) ; had .ge. for some reason. Changed to .gt. Oct 9, 2018
+        if(.not.ismissing(rad(tracki)))then
+            if(rad(tracki).and.rad(tracki).ne.34.and.rad(tracki).ne.0)then
+                ; sanity check; tracki should correspond to a rad=34kt line and tracki-1 to a 34, 50, or 64kt line.
+                ; This was true for Ike, but not Charley, in Charley there are 0kt lines (with no accompanying 34kt lines).
+                print("unexpected wind intensity threshold in fort.22 file")
+                print(tostring(rad(tracki)))
+                print(date_str(tracktime(tracki)))
+                exit
+            end if
         end if
         ; Get time interval between tracki and tracki-1 and fraction of time past by frame time
         frac = tofloat((f->time(itime) - tracktime(tracki-1)) / (tracktime(tracki)-tracktime(tracki-1)))
