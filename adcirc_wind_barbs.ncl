@@ -21,7 +21,7 @@ begin
 	meshdir = "/glade/work/ahijevyc/ADCIRC/esmf_regrid."+mesh+"/"
 	diri = "/glade/work/ahijevyc/ADCIRC/IRMA/control/"
 	diri = "/glade/scratch/mpasrt/uni/2017090600/ecic/latlon_0.125deg_025km/"
-	diri = "/glade/scratch/ahijevyc/kowaleski/2017090512/9km3km/"
+	diri = "/glade/scratch/ahijevyc/kowaleski/2017090512/EPS_01/27km9km/"
 
 	slpfile = diri+"fort.73.nc"
 
@@ -34,6 +34,7 @@ begin
     ;print(cd_string(time, "%Y%N%D %H%M"))
     iTime = 119 ; good for control init 2017090718 
     iTime = 119-42 ; good for init 2017090600 valid 201709100600 fhr=102
+    iTime = 116 ; initial 2017090512 valid 201709100900 
     stime = cd_string(time(iTime), "%Y%N%D %H%M")
     print(stime)
     title = stime
@@ -240,12 +241,12 @@ begin
 	vres = True
 	vres@gsnDraw = False
 	vres@gsnFrame = False
-	vres@vcRefLengthF    = 0.024
+	vres@vcRefLengthF    = 0.02
 	vres@vcGlyphStyle = "WindBarb"
 	vres@vcPositionMode = "ArrowHead"
-	vres@vcMinDistanceF = 0.030
+	vres@vcMinDistanceF = 0.021
 	vres@vcRefAnnoOn = False
-	vres@vcWindBarbLineThicknessF = 1.6
+	vres@vcWindBarbLineThicknessF = 1.5
 	vres@vcWindBarbScaleFactorF = 1.94384
 	plot_ov = gsn_csm_vector(wks,u,v,vres)
 	overlay(plot,plot_ov)
