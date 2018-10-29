@@ -142,14 +142,15 @@ begin
         zeta = subtract_tide(zeta, model_file)
     end if
 
-    if(min(zeta).le.-12.or.max(zeta).gt.12.)then
-        print("zeta out of whack.  Stopping")
+    reasonable_water_lvl = 12
+    if(min(zeta).le.-reasonable_water_lvl.or.max(zeta).gt.reasonable_water_lvl)then
+        print("unreasonable water level.  Stopping")
         printVarSummary(zeta)
         printMinMax(zeta,False)
-        if(max(zeta).gt.12)then
+        if(max(zeta).gt.reasonable_water_lvl)then
             iwhack = ind_resolve(maxind(ndtooned(zeta)),dimsizes(zeta))
         end if
-        if(min(zeta).lt.12)then
+        if(min(zeta).lt.-reasonable_water_lvl)then
             iwhack = ind_resolve(minind(ndtooned(zeta)),dimsizes(zeta))
         end if
         print(iwhack)
@@ -157,8 +158,8 @@ begin
         lat = f->y(iwhack(0,1))
         junk := f->zeta(iwhack(0,0),:)
         res@sfDataArray    := junk
-        res@sfXArray        = cse->x
-        res@sfYArray        = cse->y
+        res@sfXArray        = f->x
+        res@sfYArray        = f->y
         res@cnFillMode      = "RasterFill"
         res@cnFillOn        = True
         res@cnLinesOn       = False
