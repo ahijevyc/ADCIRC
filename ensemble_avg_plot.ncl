@@ -4,8 +4,23 @@ load "/glade/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_su
 
 ; forked from simple_plot.ncl Nov 13 2015
 ; Updated and adapted for hwt2017 ensemble Feb 2018
+; 
+; PURPOSE
+; read maxele.63.nc for several files and plot probability of inundation above a threshold.
 
+; USAGE
+; ncl 'type="prob"' 'modelstr="WRF.2017090512"' thresh=1 zoom=2 ensemble_avg_plot.ncl
+; assumes maxele.63.nc files are in subdirectories named
+; WRF.2017090512.EPS_01.27km3km
+; WRF.2017090512.EPS_02.27km3km
+; ...
+; WRF.2017090512.EPS_50.27km3km
+; WRF.2017090512.EPS_CO.27km3km
 
+; zoom is an integer that determines how far and where to zoom in. High numbers zoom in more. 
+; parse /glade/work/ahijevyc/ncl/get_field_res.ncl for region definitions. (e.g. "IRMA_zoom2")
+
+ 
 begin
     ; Run first with type="avg"
     if(.not.isvar("type"))then
@@ -18,8 +33,9 @@ begin
         stormname = "IRMA"
     end if
     stride = 1
-    ; basedir used to find maxele.63.nc and fort.22 files. 
-    basedir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+".ens_*/"
+    ; basedir used to find maxele.63.nc and fort.22 files.
+    ensemble_str = "EPS_" 
+    basedir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"."+ensemble_str+"??.27km3km/"
     outdir  = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
     ; zoom level
     if(.not.isdefined("zoom")) then
@@ -185,8 +201,9 @@ begin
     ; draw tracks for all members
     do iveer=0,dimsizes(trackfiles)-1  
         trackfile = trackfiles(iveer)
-        iens = str_index_of_substr(trackfile,"/ens_",1)
-        ens = str_get_cols(trackfile,iens+5,iens+6)
+        iens = str_index_of_substr(trackfile,ensemble_str,1)
+        lens = strlen(ensemble_str)
+        ens = str_get_cols(trackfile,iens+lens,iens+lens+1)
         ens = str_sub_str(ens,"/","") ; Remove slashes
         if(fileexists(trackfile))then
             print("reading "+trackfile)
