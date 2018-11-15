@@ -44,6 +44,8 @@ begin
             control_str = "control_nws20_newtides_2017090812"
         end if
     end if
+
+
     ; If True, plot only one frame (default False)
     if(.not.isdefined("one_frame")) then
         one_frame = False
@@ -206,7 +208,7 @@ begin
     res@gsnDraw                  = False
     res@gsnFrame                 = False
     res@cnLevelSelectionMode     = "ManualLevels"
-    res@cnMinLevelValF           =  1e-11
+    res@cnMinLevelValF           =  1e-09
     res@cnMaxLevelValF           =  2.0
     res@cnLevelSpacingF          =  0.2
     ; Tricky color table
