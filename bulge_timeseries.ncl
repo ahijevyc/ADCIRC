@@ -23,22 +23,27 @@ begin
         stormname = "IRMA"
     end if
     if(.not.isvar("stride"))then
-        stride=2
-        if(str_get_cols(stormname,-3,-1).eq."IKE")then
-            stride=10
-        end if
+        stride=1
     end if
     basedir = "/glade/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
     control_str = "control"
     ; if you change this here, change in perfect_cntrl.ncl also.
-    if(isStrSubset(modelstr,"_nws19").or.isStrSubset(modelstr,"coldstart")\
-        .or.isStrSubset(modelstr,".ecic")\
-        .or.isStrSubset(modelstr,"EPS")\
-        .or.isStrSubset(modelstr,"ECMWF"))
+    if(isStrSubset(modelstr,"_nws19")\
+        .or.isStrSubset(modelstr,"coldstart")\
+        .or.isStrSubset(modelstr,".ecic"))then
         control_str = "control_nws19"
     end if
-
+    if(isStrSubset(modelstr,"_nws20")\
+        .or.isStrSubset(modelstr,"ECMWF")\
+        .or.isStrSubset(modelstr,"EPS"))then
+        if(isStrSubset(modelstr,"2017090512"))then
+            control_str = "control_nws20_newtides_2017090512"
+        end if
+        if(isStrSubset(modelstr,"2017090812"))then
+            control_str = "control_nws20_newtides_2017090812"
+        end if
+    end if
     ; If True, plot only one frame (default False)
     if(.not.isdefined("one_frame")) then
         one_frame = False
@@ -94,7 +99,7 @@ begin
     domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
                    sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF) + region
     outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + "."+sprintf("stride%02.0f.",stride)+domainString
-    iregion = get_iregion(f, region)
+    iregion = get_iregion(f, region, res)
     k = ind(iregion .and. f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
     ; Take every stride-th node (to speed things up).
     k := k(::stride)
