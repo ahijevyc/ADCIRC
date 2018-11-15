@@ -1,5 +1,6 @@
 load "/glade/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/work/ahijevyc/ncl/read_atcf.ncl"
+load "/glade/work/ahijevyc/ADCIRC/clusters.ncl"
 load "/glade/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
 
 ; forked from simple_plot.ncl Nov 13 2015
@@ -29,14 +30,22 @@ begin
     if(.not.isvar("modelstr"))then
         modelstr = "ECMWF.2017090612"
     end if
+    ; this is the part that comes after modelstr and a period '.'
+    if(.not.isvar("ensemble_str"))then
+        ensemble_str = "EPS_??.27km3km"
+        ensemble_str = "ens_*" ; could be single digit ensemble member
+    end if
     if(.not.isvar("stormname"))then
         stormname = "IRMA"
     end if
-    stride = 1
     ; basedir used to find maxele.63.nc and fort.22 files.
-    ensemble_str = "EPS_" 
-    basedir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"."+ensemble_str+"??.27km3km/"
+    basedir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"."+ensemble_str+"/"
     outdir  = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
+    if(isvar("cluster"))then
+        basedir := "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+".EPS_"+ get_members(cluster, stormname, 7, 5) + ".27km3km/"
+        outdir  = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr +        ".cluster"+cluster                     + ".27km3km/"
+    end if
+    stride = 1
     ; zoom level
     if(.not.isdefined("zoom")) then
         zoom = 1
@@ -71,9 +80,10 @@ begin
     res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
 
 
-    ; ECMWF ensemble
-    members    = systemfunc("ls "+basedir+"maxele.63.nc")
-    trackfiles = systemfunc("ls "+basedir+"fort.22"  )
+    ; ECMWF or WRF ensemble
+    ; basedir may be an array of strings
+    members    = systemfunc("ls " + str_join(basedir+"maxele.63.nc", " "))
+    trackfiles = systemfunc("ls " + str_join(basedir+"fort.22"     , " "))
 
     ; hwt2017 ensemble
     ;members    = systemfunc("ls "+basedir+"ens_*/latlon_0.125deg_000km/maxele.63.nc")
@@ -201,16 +211,18 @@ begin
     ; draw tracks for all members
     do iveer=0,dimsizes(trackfiles)-1  
         trackfile = trackfiles(iveer)
-        iens = str_index_of_substr(trackfile,ensemble_str,1)
-        lens = strlen(ensemble_str)
-        ens = str_get_cols(trackfile,iens+lens,iens+lens+1)
-        ens = str_sub_str(ens,"/","") ; Remove slashes
+        ; how do you get ens number from "ens_??"
+        ; Assume it follows last underscore in track filename
+        iens = str_index_of_substr(trackfile,"_",-1)
+        track_label = str_get_cols(trackfile,iens+1,iens+2)
+        track_label = str_sub_str(track_label,"/","") ; Remove slashes
+        track_label = str_sub_str(track_label,".","") ; Remove periods
         if(fileexists(trackfile))then
             print("reading "+trackfile)
             adeck := read_atcf(trackfile)
             tracklon := adeck@lon
             tracklat := adeck@lat
-            lres@gsLineLabelString = ens
+            lres@gsLineLabelString = track_label
             gsn_polyline(wks,map,tracklon,tracklat,lres)
         end if
     end do
@@ -218,7 +230,11 @@ begin
     txres = True
     txres@txFontHeightF = 0.01
     txres@txJust        = "BottomLeft"
-    gsn_text_ndc(wks, "domain "+tostring(zoom)+"~C~"+systemfunc("date"),0.01,0.01,txres)
+    cstr = "domain "+tostring(zoom)+"~C~"+systemfunc("date")
+    if(isvar("cluster"))then
+        cstr = "cluster " + cluster + "~C~" + cstr
+    end if
+    gsn_text_ndc(wks, cstr,0.01,0.01,txres)
 
     frame(wks)
     print("made "+outfile+"."+wtype)
