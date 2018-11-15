@@ -63,7 +63,7 @@ begin
                    sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF) + region
     outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + \
               "."+sprintf("stride%02.0f.",stride)+domainString+".zeta_max"
-    iregion = get_iregion(f, region)
+    iregion = get_iregion(f, region, res)
     k = ind(iregion .and. f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
     
     model_file = "/tmp/"+stormname+"."+modelstr+".zoom"+zoom+".nc" ; temporary small grid
