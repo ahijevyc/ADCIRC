@@ -32,16 +32,27 @@ begin
     if(.not.isvar("stormname"))
         stormname = "IRMA"
     end if
-    stride = 1
+    if(.not.isvar("stride"))then
+        stride=1
+    end if
     basedir = "/glade/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
     control_str = "control"
     ; if you change this here, change in bulge_timeseries.ncl also.
-    if(isStrSubset(modelstr,"_nws19").or.isStrSubset(modelstr,"coldstart")\
-        .or.isStrSubset(modelstr,".ecic")\
-        .or.isStrSubset(modelstr,"EPS")\
-        .or.isStrSubset(modelstr,"ECMWF"))
+    if(isStrSubset(modelstr,"_nws19")\
+        .or.isStrSubset(modelstr,"coldstart")\
+        .or.isStrSubset(modelstr,".ecic"))then
         control_str = "control_nws19"
+    end if
+    if(isStrSubset(modelstr,"_nws20")\
+        .or.isStrSubset(modelstr,"ECMWF")\
+        .or.isStrSubset(modelstr,"EPS"))then
+        if(isStrSubset(modelstr,"2017090512"))then
+            control_str = "control_nws20_newtides_2017090512"
+        end if
+        if(isStrSubset(modelstr,"2017090812"))then
+            control_str = "control_nws20_newtides_2017090812"
+        end if
     end if
     obsdir   = str_sub_str(modeldir,modelstr,control_str)
     csedir   = str_sub_str(modeldir,modelstr,"coldstart_extend")
@@ -91,7 +102,7 @@ begin
                    sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF) + region
     outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + \
               "."+sprintf("stride%02.0f.",stride)+domainString+".perfectmodel"
-    iregion = get_iregion(f, region)
+    iregion = get_iregion(f, region, res)
     k = ind(iregion .and. f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
     
     tmpdir = "/glade/scratch/"+getenv("USER")+"/temp/"
