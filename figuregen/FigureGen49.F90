@@ -5655,12 +5655,6 @@ END SUBROUTINE
 SUBROUTINE WritePSImage(Record,IL1,IL2,IL3)
 
         USE DATA
-
-        ! To compile with datetime module, add *.f90 files in ~ahijevyc/src/datetime-fortran/src/lib 
-        ! Could not figure out how to use -I or -L or -ldatetime to compile.
-        ! ifort FigureGen49.F90 -DNETCDF -I /glade/u/apps/ch/opt/netcdf/4.4.1.1/intel/17.0.1/include -L
-        ! /glade/u/apps/ch/opt/netcdf/4.4.1.1/intel/17.0.1/lib -lnetcdf ~ahijevyc/src/datetime-fortran/src/lib/*.f90 
-        ! -o FigureGen49_serial.exe
         USE datetime_module, only: datetime, timedelta
         IMPLICIT NONE
 
