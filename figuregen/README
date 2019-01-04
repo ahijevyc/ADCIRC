@@ -1,0 +1,1 @@
+ifort FigureGen49.F90 -DNETCDF -I /glade/u/apps/ch/opt/netcdf/4.4.1.1/intel/17.0.1/include -L /glade/u/apps/ch/opt/netcdf/4.4.1.1/intel/17.0.1/lib -lnetcdf -I /glade/u/home/ahijevyc/include -L /glade/u/home/ahijevyc/lib -ldatetime -o FigureGen49_serial.exe
