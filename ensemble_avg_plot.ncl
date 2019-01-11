@@ -38,12 +38,37 @@ begin
     if(.not.isvar("stormname"))then
         stormname = "IRMA"
     end if
+    if(.not.isvar("ncluster"))then
+        ncluster = 7
+    end if
+    if(.not.isvar("cluster_deg"))then
+        cluster_deg = 5
+    end if
+    if(.not.isvar("cluster_start_time"))then
+        cluster_start_time = "2017090512"
+    end if
     ; basedir used to find maxele.63.nc and fort.22 files.
     basedir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"."+ensemble_str+"/"
     outdir  = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
     if(isvar("cluster"))then
-        basedir := "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+".EPS_"+ get_members(cluster, stormname, 7, 5) + ".27km3km/"
-        outdir  = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr +        ".cluster"+cluster                     + ".27km3km/"
+        ;members = get_members(cluster, stormname, 7, 5)
+        tmp := str_split(modelstr,".")
+        init_time = tmp(1)
+        ; cluster arguments used for printClusters.csh, directory name, and plot label
+        cluster_args = (/init_time, cluster_start_time, tostring(cluster_deg), tostring(ncluster), tostring(cluster) /)
+        members  = systemfunc("/glade/u/home/fossell/adcirc/kowaleski/printClusters.csh "+str_join(cluster_args, " "))
+        members := str_split(members," ") ; split string into array
+        do i = 0, dimsizes(members)-1 ; zero-pad to 2 digits
+            do while (strlen(members(i)).lt.2)
+                members(i) = "0" + members(i)
+            end do
+        end do
+        basedir := "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+".EPS_"+ members + ".27km3km/"
+        outdir  = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr +".cluster"+str_join(cluster_args, "_") + ".27km3km/"
+        if(.not.fileexists(outdir))then
+            print(outdir + " does not exist")
+            exit
+        end if
     end if
     stride = 1
     ; zoom level
@@ -80,10 +105,10 @@ begin
     res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
 
 
-    ; ECMWF or WRF ensemble
+    ; ECMWF or WRF ensemble or WRF ensemble cluster
     ; basedir may be an array of strings
-    members    = systemfunc("ls " + str_join(basedir+"maxele.63.nc", " "))
-    trackfiles = systemfunc("ls " + str_join(basedir+"fort.22"     , " "))
+    members    := systemfunc("ls " + str_join(basedir+"maxele.63.nc", " "))
+    trackfiles  = systemfunc("ls " + str_join(basedir+"fort.22"     , " "))
 
     ; hwt2017 ensemble
     ;members    = systemfunc("ls "+basedir+"ens_*/latlon_0.125deg_000km/maxele.63.nc")
@@ -232,7 +257,7 @@ begin
     txres@txJust        = "BottomLeft"
     cstr = "domain "+tostring(zoom)+"~C~"+systemfunc("date")
     if(isvar("cluster"))then
-        cstr = "cluster " + cluster + "~C~" + cstr
+        cstr = "cluster " + str_join(cluster_args, " ") + "~C~" + cstr
     end if
     gsn_text_ndc(wks, cstr,0.01,0.01,txres)
 
