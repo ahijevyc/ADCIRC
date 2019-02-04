@@ -33,7 +33,7 @@ begin
     ; this is the part that comes after modelstr and a period '.'
     if(.not.isvar("ensemble_str"))then
         ensemble_str = "EPS_??.27km3km"
-        ensemble_str = "ens_*" ; could be single digit ensemble member
+        ensemble_str = "ens_" ; could be single digit ensemble member
     end if
     if(.not.isvar("stormname"))then
         stormname = "IRMA"
@@ -48,7 +48,7 @@ begin
         cluster_start_time = "2017090512"
     end if
     ; basedir used to find maxele.63.nc and fort.22 files.
-    basedir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"."+ensemble_str+"/"
+    basedir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"."+ensemble_str+"*/"
     outdir  = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
     if(isvar("cluster"))then
         ;members = get_members(cluster, stormname, 7, 5)
@@ -118,10 +118,8 @@ begin
     ;members    = systemfunc("ls "+basedir+"latlon_0.125deg_000km/maxele.63.nc")
     ;trackfiles = systemfunc("ls "+basedir+"latlon_0.500deg_025km/gfdl_tracker/tracker/fort.64.IRMA")
     
-    ; perturbed ensemble (where modelstr="veer", or whatever)
-    ; ncl 'modelstr="vmax_nws19"' 'type="total"' thresh=1 ../ensemble_avg_plot.ncl
-    ;members    := systemfunc("ls /glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/maxele.63.nc")
-    ;trackfiles := systemfunc("ls /glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"*/fort.22")
+    ; perturbed ensemble (where modelstr="nws19", or whatever)
+    ; ncl 'modelstr="nws19"' 'ensemble_str="veer"' 'type="total"' thresh=1 ../ensemble_avg_plot.ncl
 
 
     ensemble =  addfiles(members, "r")
@@ -187,7 +185,7 @@ begin
 
     ; Only retain land values and low-lying land nodes below MSL (sfc_sub_state=1, or "startDry" nodes). 
     x_inundation = mask(x_inundation, f->depth.le.0 .or. (sfc_sub_state.eq.1), True)
-    x_inundation@long_name = modelstr+"~C~ensemble " + type + " maximum inundation >="+thresh_string
+    x_inundation@long_name = modelstr+" "+ensemble_str+"~C~ensemble " + type + " maximum inundation >="+thresh_string
     if(.not.isatt(x_inundation,"units"))then
         x_inundation@units     = zeta_max@units
     end if
@@ -236,12 +234,9 @@ begin
     ; draw tracks for all members
     do iveer=0,dimsizes(trackfiles)-1  
         trackfile = trackfiles(iveer)
-        ; how do you get ens number from "ens_??"
-        ; Assume it follows last underscore in track filename
-        iens = str_index_of_substr(trackfile,"_",-1)
-        track_label = str_get_cols(trackfile,iens+1,iens+2)
-        track_label = str_sub_str(track_label,"/","") ; Remove slashes
-        track_label = str_sub_str(track_label,".","") ; Remove periods
+        ; Assume ens member label follows ensemble_str 
+        iens = str_index_of_substr(trackfile,ensemble_str,-1)
+        track_label = str_get_cols(trackfile,iens,-9) ; ignore "/fort.22" at end
         if(fileexists(trackfile))then
             print("reading "+trackfile)
             adeck := read_atcf(trackfile)
