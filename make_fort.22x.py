@@ -57,7 +57,7 @@ file = sys.argv[1]
 # field 'slp' or 'u'
 field = sys.argv[2]
 if field not in ['u','slp']:
-    print "bad field",field
+    print("bad field",field)
     sys.exit(1)
 
 # Print array in 8 columns.
@@ -72,10 +72,10 @@ def print_ncols(a,n=80,fill=1013.,fmt="{:10.4f}"):
     for i,x in enumerate(a.flatten(order='C')):
         line = line + fmt.format(x)
         if len(line) >= n:
-            print line
+            print(line)
             line = ""
     if line:
-        print line
+        print(line)
 def roll(x, lon):
     # roll array so longitudes start at dateline 
     pos, = np.where(lon == 180)
@@ -84,15 +84,15 @@ def roll(x, lon):
 
 def get_stuff(file):
     if file == 'latlon.nc':
-        print 'script cannot process latlon.nc yet (output from convert_mpas)'
+        print('script cannot process latlon.nc yet (output from convert_mpas)')
         sys.exit(1)
 
     ncf = Dataset(file,"r")
 
-    if hasattr(ncf, u'START_DATE'):
-        start_date = getattr(ncf, u'START_DATE')
-    if hasattr(ncf, u'config_start_time'):
-        start_date = getattr(ncf, u'config_start_time')
+    if hasattr(ncf, 'START_DATE'):
+        start_date = getattr(ncf, 'START_DATE')
+    if hasattr(ncf, 'config_start_time'):
+        start_date = getattr(ncf, 'config_start_time')
     if 'west_east' in ncf.variables:
         lon = ncf.variables['west_east'][:]
     if 'south_north' in ncf.variables:
@@ -162,12 +162,12 @@ dy = lat[1] - lat[0]
 # RECORD HEADER
 # Does Dt change? Documentation says it is the start time, but Kate says yes.
 def f22xrec_header(nlat,nlon,dx,dy,lat,lon,valid_time):
-    print '%5s%4d%6s%4d%3s%6.4f%3s%6.4f%6s%8.3f%6s%8.3f%3s%12s' % (
+    print('%5s%4d%6s%4d%3s%6.4f%3s%6.4f%6s%8.3f%6s%8.3f%3s%12s' % (
                 "iLat=",nlat,"iLong=",nlon,
                 "DX=",dx,"DY=",dy,
                 "SWLat=",lat[0],"SWlon=",lon[0],
                 "Dt=",valid_time.strftime('%Y%m%d%H%M')
-            )
+            ))
 
 # Come up with better way of dealing with input netCDF files that have just one time or
 # lotza times. 
