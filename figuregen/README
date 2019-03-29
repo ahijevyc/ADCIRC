@@ -1,1 +1,2 @@
 ifort FigureGen49.F90 -DNETCDF -lnetcdf -I ~/src/datetime-fortran/build/include -I /glade/u/home/ahijevyc/include -L /glade/u/home/ahijevyc/lib -ldatetime -o FigureGen49_serial.exe
+mpif90 FigureGen49.F90 -DNETCDF -lnetcdf -I ~/src/datetime-fortran/build/include -I /glade/u/home/ahijevyc/include -L /glade/u/home/ahijevyc/lib -ldatetime -o FigureGen49_parallel.exe
