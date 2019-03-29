@@ -2,6 +2,7 @@ MODULE DATA
 
         CHARACTER(LEN=50)   :: AlphaLabel
         CHARACTER(LEN=50)   :: BackgroundImagesFile
+        CHARACTER(LEN=23)   :: base_date
         CHARACTER(LEN=50)   :: BoundariesColor
         CHARACTER(LEN=50)   :: BoundariesThickness
         CHARACTER(LEN=50)   :: CoastlineColor
@@ -57,6 +58,12 @@ MODULE DATA
         CHARACTER(LEN=50)   :: VectorUFile
         CHARACTER(LEN=50)   :: VectorVFile
 
+        INTEGER             :: baseDay
+        INTEGER             :: baseHour
+        INTEGER             :: baseMin
+        INTEGER             :: baseMonth
+        INTEGER             :: baseSec
+        INTEGER             :: baseYear
         INTEGER             :: C_Node
         INTEGER             :: ContourFileNumCols
         INTEGER             :: ContourLabelSize
@@ -6967,9 +6974,11 @@ SUBROUTINE WritePSImage(Record,IL1,IL2,IL3)
             WRITE(UNIT=TimeCurrentTextFile,FMT='(A,I4.4,A)') "timecurrenttext.",Record,".txt"
             OPEN(UNIT=27,FILE=TRIM(TempPath)//TRIM(TimeCurrentTextFile),ACTION="WRITE")
             WRITE(UNIT=27,FMT='(A,F5.2,A)') "0 0 14 0 0 LT ",CurrentTime/86400.0," days"
-            ! TODO: read 'base_date' attribute of 'time' variable
             ! Get year, month, day, hour, etc. from base_date instead of hard-coding:
-            datetime0 = datetime(2017, 8, 21, 0, 0, 0) + timedelta(0,0,0,int(CurrentTime),0)
+            READ(UNIT=base_date,FMT='(I4,"-",I2,"-",I2," ",I2,":",I2,":",I2," UTC")') &
+                        baseYear, baseMonth, baseDay, baseHour, baseMin, baseSec
+            datetime0 = datetime(baseYear, baseMonth, baseDay, baseHour, baseMin, baseSec) &
+                        + timedelta(0,0,0,int(CurrentTime),0)
             WRITE(UNIT=27,FMT='(A,A)') "0 -1 5 0 0 LT ", datetime0%isoformat(" ")
             CLOSE(UNIT=27,STATUS="KEEP")
 
@@ -8857,6 +8866,10 @@ SUBROUTINE WriteXYZFiles(Record)
                 CALL Check(NF90_INQUIRE_VARIABLE(NC_ID1,NC_Var,dimids=NC_DimIDs))
                 CALL Check(NF90_INQUIRE_DIMENSION(NC_ID1,NC_DimIDs(1),len=NumRecs))
                 CALL Check(NF90_GET_VAR(NC_ID1,NC_Var,NC_Time,start=(/Record/),count=(/1/)))
+                CALL Check(NF90_INQUIRE_ATTRIBUTE(NC_ID1,NC_Var,'base_date'))
+                ! read 'base_date' attribute of 'time' variable
+                CALL Check(NF90_GET_ATT(NC_ID1,NC_Var,'base_date',base_date))
+                WRITE(*,"(A,I4.4,A)") "Core ",MyRank," read the base_date: '"//base_date//"'"
                 CurrentTime = NC_Time(1)
                 NC_Status = NF90_INQ_VARID(NC_ID1,'u-vel',NC_Var)
                 IF(NC_Status.EQ.NF90_NOERR)THEN
