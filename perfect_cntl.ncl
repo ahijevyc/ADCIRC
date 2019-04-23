@@ -38,20 +38,20 @@ begin
     basedir = "/glade/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
     control_str = "control"
-    ; if you change this here, change in bulge_timeseries.ncl also.
-    if(isStrSubset(modelstr,"_nws19")\
+    ; if you change this here, change in inundation_timeseries.ncl also.
+    if(isStrSubset(modelstr,"nws19")\
         .or.isStrSubset(modelstr,"coldstart")\
         .or.isStrSubset(modelstr,".ecic"))then
-        control_str = "control_nws19"
+        control_str = "nws19.control"
     end if
-    if(isStrSubset(modelstr,"_nws20")\
+    if(isStrSubset(modelstr,"nws20")\
         .or.isStrSubset(modelstr,"ECMWF")\
         .or.isStrSubset(modelstr,"EPS"))then
         if(isStrSubset(modelstr,"2017090512"))then
-            control_str = "control_nws20_newtides_2017090512"
+            control_str = "nws20.control_newtides_2017090512"
         end if
         if(isStrSubset(modelstr,"2017090812"))then
-            control_str = "control_nws20_newtides_2017090812"
+            control_str = "nws20.control_newtides_2017090812"
         end if
     end if
     obsdir   = str_sub_str(modeldir,modelstr,control_str)
