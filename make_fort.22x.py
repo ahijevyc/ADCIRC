@@ -82,13 +82,14 @@ def roll(x, lon):
     axis = x.ndim - 1
     return np.roll(x,pos,axis=axis)
 
-def get_stuff(file):
+def get_stuff(ifile):
     if file == 'latlon.nc':
         print('script cannot process latlon.nc yet (output from convert_mpas)')
         sys.exit(1)
 
-    ncf = Dataset(file,"r")
+    ncf = Dataset(ifile,"r")
 
+    start_date = None
     if hasattr(ncf, 'START_DATE'):
         start_date = getattr(ncf, 'START_DATE')
     if hasattr(ncf, 'config_start_time'):
@@ -116,6 +117,23 @@ def get_stuff(file):
         v10 = roll(v10,lon)
         slp = roll(slp,lon)
         lon  = roll(lon,lon)# make sure you roll longitude last!
+    # grib1 file ECMWF Linus Magnussen
+    if "10U_GDS0_SFC" in ncf.variables:
+        sdate = ncf.variables["10U_GDS0_SFC"].initial_time
+        start_date = sdate[6:10]+"/"+sdate[0:5]+" "+sdate[12:14]
+        u10 = ncf.variables['10U_GDS0_SFC'][:]
+        v10 = ncf.variables['10V_GDS0_SFC'][:]
+        slp = ncf.variables['MSL_GDS0_SFC'][:]
+        lon = ncf.variables['g0_lon_2'][:]
+        lat = ncf.variables['g0_lat_1'][:]
+        # Even though the usual ECMWF grib file (above) goes through the roll() function
+        # to shift the starting longitude to the dateline, the grib1 input from Linus Magnussen
+        # doesn't seem to need this.
+
+    if start_date is None:
+        print(ncf.variables)
+        print("did not get start_date from "+ifile)
+        pdb.set_trace()
 
 
     yyyymmddhh = start_date[0:4] + start_date[5:7] + start_date[8:10] + start_date[11:13]
