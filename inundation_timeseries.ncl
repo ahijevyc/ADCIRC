@@ -28,20 +28,21 @@ begin
     basedir = "/glade/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
     control_str = "control"
+    control_str = "nws20.control_newtides_2017090512"
     ; if you change this here, change in perfect_cntrl.ncl also.
-    if(isStrSubset(modelstr,"_nws19")\
+    if(isStrSubset(modelstr,"nws19")\
         .or.isStrSubset(modelstr,"coldstart")\
         .or.isStrSubset(modelstr,".ecic"))then
-        control_str = "control_nws19"
+        control_str = "nws19.control"
     end if
-    if(isStrSubset(modelstr,"_nws20")\
+    if(isStrSubset(modelstr,"nws20")\
         .or.isStrSubset(modelstr,"ECMWF")\
         .or.isStrSubset(modelstr,"EPS"))then
         if(isStrSubset(modelstr,"2017090512"))then
-            control_str = "control_nws20_newtides_2017090512"
+            control_str = "nws20.control_newtides_2017090512"
         end if
         if(isStrSubset(modelstr,"2017090812"))then
-            control_str = "control_nws20_newtides_2017090812"
+            control_str = "nws20.control_newtides_2017090812"
         end if
     end if
 
@@ -64,6 +65,10 @@ begin
     end if
     if(.not.isvar("thresh"))then
         thresh = 1.0 ; inundation threshold
+    end if
+    if(.not.isvar("ymax"))then
+        ; Force maximum of y-axis. Useful for comparisons.
+        ymax = 0 
     end if
     thresh_string = sprintf("%4.2fm", thresh)
     if(.not.isvar("dryland"))then
@@ -100,7 +105,8 @@ begin
 
     domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
                    sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF) + region
-    outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + "."+sprintf("stride%02.0f.",stride)+domainString
+    outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + \
+              "."+sprintf("stride%02.0f.",stride)+domainString
     iregion = get_iregion(f, region, res)
     k = ind(iregion .and. f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
     ; Take every stride-th node (to speed things up).
@@ -239,18 +245,23 @@ begin
     sres                        = True
     sres@gsnFrame               = False
     sres@gsnDraw                = False
+    sres@tiMainFontHeightF      = 0.02
     sres@tiMainString           = modelstr + " run,  minus_astronomical_tide=" + minus_astronomical_tide
     sres@xyLineColor            = "black"
     sres@tiYAxisFontHeightF     =  0.013
     sres@xyLineThicknessF       =  3.
     sres@gsnYRefLine            =  0.0
-    sres@tmXBLabelFontHeightF   =  0.012
+    sres@tmXBLabelFontHeightF   =  0.01
     sres@xyLabelMode            = "Custom"
     sres@xyLineLabelFontHeightF =  0.008
     sres@vpXF                   =  0.2
     sres@vpWidthF               =  0.7
     sres@vpYF                   =  0.9
     sres@vpHeightF              =  0.15
+    sres@trYMinF                =  0.0
+    if(ymax.gt.0) then
+        sres@trYMaxF            = ymax
+    end if
     lres                        = True
     lres@gsLineThicknessF       =  4.
 
@@ -262,9 +273,21 @@ begin
     resTick                = True
     resTick@ttmFormat      = "%hZ %c %d"
     resTick@ttmAxis        = "XB"
-    resTick@ttmMajorStride = 48
-    resTick@ttmMinorStride = 12
-    time_axis_labels(f->time, sres, resTick)
+    dsec = f->time(1) - f->time(0) ; time step in seconds (to figure out tick mark strides)
+    resTick@ttmMajorStride = tointeger(12*3600/dsec)
+    resTick@ttmMinorStride =  tointeger(3*3600/dsec)
+    nicetimes = f->time
+    nice_multiple = 6
+    offset_from = mod(f->time(0), 3600*nice_multiple)
+    offset_from@long_name = "offset of first time from a nice even time" 
+    ; If first time is not a multiple of n hours, prepend a time that is.
+    ; That way, the major ticks will be multiples of n hours.
+    if(offset_from.gt.0)then
+        print(offset_from)
+        nicetimes := array_append_record(f->time(0)-offset_from, f->time, 0)
+    end if
+    time_axis_labels(nicetimes, sres, resTick)
+    print(sres)
  
     control_timeseries_file := str_sub_str(timeseries_file,modelstr,control_str)
    
@@ -399,8 +422,8 @@ begin
 
     first_frame = True
     do itime=0,ntime-1,1 ; If you want a specific itime, change both 0 and ntime to itime
-    ;tt = 0 ; +720
-    ;do itime=tt+130,tt+150
+    ;tt = 255
+    ;do itime=tt,tt
         ; Vertical line at current time
         sres@gsnXRefLine = f->time(itime)
         sres@gsnRightString = date_str1(itime) 
@@ -417,6 +440,11 @@ begin
         ; Get current lat/lon of storm, interpolating fort.22
         ; Find first track time later than frame time, tracki
         tracki = min(ind(tracktime .gt. f->time(itime))) ; had .ge. for some reason. Changed to .gt. Oct 9, 2018
+        if (tracki.lt.0 .or. tracki.ge.dimsizes(rad))then
+            print("bad tracki index. did you run out of times in the fort.22 file?")
+            print(" do you need to run it through ~/bin/interpolate_atcf.py?")
+            exit
+        end if
         if(.not.ismissing(rad(tracki)))then
             if(rad(tracki).and.rad(tracki).ne.34.and.rad(tracki).ne.0)then
                 ; sanity check; tracki should correspond to a rad=34kt line and tracki-1 to a 34, 50, or 64kt line.
