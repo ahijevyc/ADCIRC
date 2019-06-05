@@ -47,8 +47,11 @@ begin
     if(.not.isvar("cluster_start_time"))then
         cluster_start_time = "2017090512"
     end if
+    if(.not.isvar("tracks"))then
+        tracks = True
+    end if
     ; basedir used to find maxele.63.nc and fort.22 files.
-    basedir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"."+ensemble_str+"*/"
+    basedir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"."+ensemble_str+"/"
     outdir  = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
     if(isvar("cluster"))then
         ;members = get_members(cluster, stormname, 7, 5)
@@ -123,12 +126,17 @@ begin
 
 
     ensemble =  addfiles(members, "r")
+    print("reading "+sprinti("%d ", dimsizes(members))+" members")
     ListSetType(ensemble, "join")
     f = ensemble[0]
 
     domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
                    sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF)
-    outfile = outdir+str_sub_str(modelstr,"/",".")+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + \
+    cluster_str = ""
+    if(isvar("cluster"))then
+        cluster_str = ".cluster" + str_join(cluster_args,"_")
+    end if
+    outfile = outdir+str_sub_str(modelstr,"/",".")+cluster_str+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + \
               "."+sprintf("stride%02.0f.",stride)+domainString+"."+type
 
     zeta_max   = ensemble[:]->zeta_max
@@ -204,7 +212,12 @@ begin
     wtype@wkHeight = 2048 
     wks = gsn_open_wks(wtype,outfile)
     gsn_define_colormap(wks,"WhiteBlueGreenYellowRed")
-
+    gsn_define_colormap(wks,"prcp_1")
+    cmap = gsn_retrieve_colormap(wks)
+    res@gsnSpreadColorStart = 6
+    cmap(res@gsnSpreadColorStart,:) = (/1,1,0.999999/)
+    res@gsnSpreadColorEnd = 16
+    gsn_define_colormap(wks, cmap)
         
     res@sfXArray                 = f->x
     res@sfYArray                 = f->y
@@ -214,6 +227,8 @@ begin
     res@cnFillOn                 = True
     res@cnLinesOn                = False
     res@cnFillMode               = "RasterFill"
+    res@mpOceanFillColor         = "lightcyan" 
+    res@mpInlandWaterFillColor   = "lightcyan" 
     res@lbTitleString            = x_inundation@long_name
     res@lbTitleFontHeightF       = 0.018
     res@lbTitlePosition          = "Bottom"
@@ -231,21 +246,23 @@ begin
 
     map := gsn_csm_contour_map(wks,x_inundation,res)
 
-    ; draw tracks for all members
-    do iveer=0,dimsizes(trackfiles)-1  
-        trackfile = trackfiles(iveer)
-        ; Assume ens member label follows ensemble_str 
-        iens = str_index_of_substr(trackfile,ensemble_str,-1)
-        track_label = str_get_cols(trackfile,iens,-9) ; ignore "/fort.22" at end
-        if(fileexists(trackfile))then
-            print("reading "+trackfile)
-            adeck := read_atcf(trackfile)
-            tracklon := adeck@lon
-            tracklat := adeck@lat
-            lres@gsLineLabelString = track_label
-            gsn_polyline(wks,map,tracklon,tracklat,lres)
-        end if
-    end do
+    if(tracks)then
+        ; draw tracks for all members
+        do iveer=0,dimsizes(trackfiles)-1  
+            trackfile = trackfiles(iveer)
+            ; Assume ens member label follows ensemble_str 
+            iens = str_index_of_substr(trackfile,ensemble_str,-1)
+            track_label = str_get_cols(trackfile,iens+strlen(ensemble_str),-17) ; ignore ".27km3km/fort.22" at end
+            if(fileexists(trackfile))then
+                print("reading "+trackfile)
+                adeck := read_atcf(trackfile)
+                tracklon := adeck@lon
+                tracklat := adeck@lat
+                lres@gsLineLabelString = track_label
+                gsn_polyline(wks,map,tracklon,tracklat,lres)
+            end if
+        end do
+    end if
     
     txres = True
     txres@txFontHeightF = 0.01
