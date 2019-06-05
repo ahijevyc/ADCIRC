@@ -1,0 +1,1 @@
+put _nws19 and _nws20 at beginning of filename or directory name. Kind of like a model string. works better with ensemble_avg_plot.ncl
