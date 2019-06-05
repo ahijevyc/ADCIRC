@@ -9,6 +9,9 @@ load "/glade/work/ahijevyc/ncl/CreateTracks.ncl"
 
 ; written by David Ahijevych
 ; MSLP contour and windbarbs
+;
+; You may want to use /glade/work/ahijevyc/ECMWF/compareECMWFgrids.ncl to get blocky look
+; This program plots fields after ADCIRC interpolated them to the ADCIRC mesh.
 
 begin
 
@@ -22,6 +25,8 @@ begin
 	diri = "/glade/work/ahijevyc/ADCIRC/IRMA/control/"
 	diri = "/glade/scratch/mpasrt/uni/2017090600/ecic/latlon_0.125deg_025km/"
 	diri = "/glade/scratch/ahijevyc/kowaleski/2017090512/EPS_01/27km9km/"
+	diri = "/glade/scratch/ahijevyc/ECMWF/0p5/2017090800/ens_31/"
+	diri = "/glade/scratch/ahijevyc/ECMWF/0p125/2017090812/PF50/"
 
 	slpfile = diri+"fort.73.nc"
 
@@ -35,6 +40,8 @@ begin
     iTime = 119 ; good for control init 2017090718 
     iTime = 119-42 ; good for init 2017090600 valid 201709100600 fhr=102
     iTime = 116 ; initial 2017090512 valid 201709100900 
+    iTime = 65 ; initial 2017090800 valid 201709101800 
+    iTime = 49 ; 
     stime = cd_string(time(iTime), "%Y%N%D %H%M")
     print(stime)
     title = stime
@@ -51,10 +58,12 @@ begin
 	res@mpProjection        = "CylindricalEquidistant"
 	res@mpDataBaseVersion   = "MediumRes" 
 	res@mpLimitMode = "LatLon"
-	res@mpMinLatF=  20.
-	res@mpMaxLatF=  30.5
-	res@mpMinLonF= -89.
-	res@mpMaxLonF= -75.
+	res@mpMinLatF=  22.
+	res@mpMaxLatF=  29.
+	res@mpMinLonF= -85.
+	res@mpMaxLonF= -78.
+    res@mpGridAndLimbOn = True ; doesn't seem to have effect
+    res@mpGridLineDashPattern = "Dot"
 	; set sfXArray and sfYarray (1-D lats and lons needed for plotting a mesh)
 	res@sfXArray = f73->x
 	res@sfYArray = f73->y
@@ -207,17 +216,21 @@ begin
 
 	; U 
 	u := f74->$ustr$(iTime,:)
+    print("over all times")
     printMinMax(f74->$ustr$,False)	
+    print("at first time")
     printMinMax(f74->$ustr$(0,:),False)	
-    printMinMax(f74->$ustr$(iTime,:),False)	
+
+    print("At time "+sprinti("%d",iTime)+" before ESMF_regrid")
     printMinMax(u,False)	
 	; Extract cells within domain limits.
 	u := u(cell_idx(0:icnt-1))
 	u := ESMF_regrid(u,Opt)
 	u@lat2d = dst_lat
 	u@lon2d = dst_lon
+    print("after ECMWF_regrid")
+    printMinMax(u,False)
 
-    printMinMax(u,False)	
 	; V
 	v := f74->$vstr$(iTime,:)
 	; Extract cells within domain limits.
@@ -232,7 +245,9 @@ begin
     printVarSummary(fld)
     printMinMax(fld,False)
     res = get_field_res(wks, "speed_10m", fld)
-    res@cnMaxLevelValF = 100.
+    res@cnLevelSpacingF = 14.
+    res@cnMinLevelValF = 36.
+    res@cnMaxLevelValF = 78.
 
     ; wind speed colors
     plot = gsn_csm_contour_map(wks, fld(iTime,:),res) 
