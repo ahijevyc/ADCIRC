@@ -42,13 +42,16 @@ begin
         ncluster = 7
     end if
     if(.not.isvar("cluster_deg"))then
-        cluster_deg = 5
+        cluster_deg = 3
     end if
     if(.not.isvar("cluster_start_time"))then
         cluster_start_time = "2017090512"
     end if
     if(.not.isvar("tracks"))then
         tracks = True
+    end if
+    if(.not.isvar("markers"))then
+        markers = False
     end if
     ; basedir used to find maxele.63.nc and fort.22 files.
     basedir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"."+ensemble_str+"/"
@@ -80,6 +83,7 @@ begin
     end if
     ; region - not needed. Just use zoom=2 for FloridaSW
     ;                           use zoom=5 for Tampa
+    ;                           use zoom=6 for FloridaNE domain
     if(.not.isvar("minus_astronomical_tide"))then
         minus_astronomical_tide = False
     end if
@@ -236,7 +240,7 @@ begin
     ; Don't advance the frame.
     res@gsnFrame = False
 
-    res@mpDataBaseVersion       = "HighRes"     ; "MediumRes" will run faster.
+    res@mpDataBaseVersion       = "MediumRes" ; "HighRes" has no state borders. "MediumRes" will run faster.
     res@mpLimitMode             = "LatLon"
     res@mpPerimOn               = False
     res@pmTickMarkDisplayMode   = "Always"    ; Turn on map tickmarks.
@@ -245,6 +249,36 @@ begin
     lres@gsLineLabelFontHeightF = 0.007
 
     map := gsn_csm_contour_map(wks,x_inundation,res)
+
+    if(markers)then
+        markerfile = "/glade/work/ahijevyc/ADCIRC/IRMA/quantify_locs.csv"
+        lines := asciiread(markerfile,-1,"string")
+        mlons = tofloat(str_get_field(lines,1,","))
+        mlats = tofloat(str_get_field(lines,2,","))
+        mlocs = str_get_field(lines,3,",")
+        mres = True
+        mres@gsMarkerIndex = 16            ; 5=X 16=circle
+        mres@gsMarkerSizeF = 5.0           
+        mres@gsMarkerColor = (/"black"/)   ; choose color
+        mres@txFontHeightF = 0.01
+        if(zoom.eq.4)then
+            mres@txJust        = "BottomRight" ; good for SW domain
+        end if
+        if(zoom.eq.6)then
+            mres@txJust        = "TopLeft" ; good for NE domain
+        end if
+        gsn_polymarker(wks,map,mlons,mlats,mres)
+        gsn_text(wks,map,"   "+mlocs+" ",mlons,mlats,mres)
+        do imarker=0,dimsizes(lines)-1
+            ; find index of closest node 
+            ; 1-deg longitude is smaller than 1-deg latitude by factor of cos(lat).
+            dx = (mlons(imarker) - f->x) * cos(f->y)
+            dy = mlats(imarker) - f->y
+            distance = sqrt(dx^2. + dy^2.)
+            inode = minind(distance)
+            print(mlocs(imarker)+sprintf(" %4.2f", x_inundation(inode)))
+        end do
+    end if
 
     if(tracks)then
         ; draw tracks for all members
