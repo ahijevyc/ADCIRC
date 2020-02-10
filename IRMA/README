@@ -1,1 +1,5 @@
 put _nws19 and _nws20 at beginning of filename or directory name. Kind of like a model string. works better with ensemble_avg_plot.ncl
+
+At one time, symbolic link WRF member 51 to WRF member CO. printCluster.csh uses 51
+But then 2017090812 was clustered again with member 31 redone (it was a copy of 38 before). After that Alex referred to the control as CO.
+I like that name instead of 51. I asked Kate to change all the printClusters.csh output to CO instead of 51 on Dec 16, 2019.
