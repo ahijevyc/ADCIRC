@@ -245,10 +245,10 @@ begin
     sres                        = True
     sres@gsnFrame               = False
     sres@gsnDraw                = False
-    sres@tiMainFontHeightF      = 0.02
+    sres@tiMainFontHeightF      = 0.014
     sres@tiMainString           = modelstr + " run,  minus_astronomical_tide=" + minus_astronomical_tide
     sres@xyLineColor            = "black"
-    sres@tiYAxisFontHeightF     =  0.013
+    sres@tiYAxisFontHeightF     =  0.011
     sres@xyLineThicknessF       =  3.
     sres@gsnYRefLine            =  0.0
     sres@tmXBLabelFontHeightF   =  0.01
@@ -440,7 +440,7 @@ begin
         ; Get current lat/lon of storm, interpolating fort.22
         ; Find first track time later than frame time, tracki
         tracki = min(ind(tracktime .gt. f->time(itime))) ; had .ge. for some reason. Changed to .gt. Oct 9, 2018
-        if (tracki.lt.0 .or. tracki.ge.dimsizes(rad))then
+        if (ismissing(tracki) .or. tracki.ge.dimsizes(rad))then
             print("bad tracki index. did you run out of times in the fort.22 file?")
             print(" do you need to run it through ~/bin/interpolate_atcf.py?")
             exit
