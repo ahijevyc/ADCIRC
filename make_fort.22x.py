@@ -61,21 +61,24 @@ if field not in ['u','slp']:
     sys.exit(1)
 
 # Print array in 8 columns.
-# Sure there is a built-in function for this but I don't know it yet.
-def print_ncols(a,n=80,fill=1013.,fmt="{:10.4f}"):
+def print_ncols(x,ncol=8,fill=1013.,fmt="%10.4f"):
     # Replace nans with fill value.
-    inds = np.where(np.isnan(a))
-    a[inds] = fill
-    # Print elements from west to east, and then from south to north.
-    # I think that is what order='C' or row-major order does. This is the default.
-    line = ""
-    for i,x in enumerate(a.flatten(order='C')):
-        line = line + fmt.format(x)
-        if len(line) >= n:
+    x = x.filled(fill_value=fill)
+    if x.size % ncol == 0:
+        # Use fast method if size of x array is multiple of ncol. 
+        np.savetxt(sys.stdout, np.reshape(x, (-1,ncol), order='C'), fmt=fmt, delimiter='')
+    else: 
+        # Print elements from west to east, and then from south to north.
+        # I think that is what order='C' or row-major order does. This is the default.
+        line = ""
+        for i,e in enumerate(x.flatten(order='C')):
+            line = line + fmt.format(e)
+            if i % ncol == ncol-1: # TODO: untested with new format string. Used to have curly brackets and no percentage sign: '{:10.4f}'
+                print(line)
+                line = ""
+        if line:
             print(line)
-            line = ""
-    if line:
-        print(line)
+
 def roll(x, lon):
     # roll array so longitudes start at dateline 
     pos, = np.where(lon == 180)
@@ -192,10 +195,10 @@ def f22xrec_header(nlat,nlon,dx,dy,lat,lon,valid_time):
 
 def do_print_ncols(field,u10,v10,slp):
     if field == "u":
-        print_ncols(u10,fill=0.,fmt="{:10.5f}")
-        print_ncols(v10,fill=0.,fmt="{:10.5f}")
+        print_ncols(u10,fill=0.,fmt="%10.5f")
+        print_ncols(v10,fill=0.,fmt="%10.5f")
     if field == "slp":
-        print_ncols(slp,fill=1013.,fmt="{:10.4f}")
+        print_ncols(slp,fill=1013.,fmt="%10.4f")
 
 # Deal with time dimension
 if len(valid_times) > 1:
