@@ -32,14 +32,13 @@ begin
     end if
     ; this is the part that comes after modelstr and a period '.'
     if(.not.isvar("ensemble_str"))then
-        ensemble_str = "EPS_??.27km3km"
-        ensemble_str = "ens_" ; could be single digit ensemble member
+        ensemble_str = "ens_" ; could be single digit ensemble member or "CO"
     end if
     if(.not.isvar("stormname"))then
         stormname = "IRMA"
     end if
     if(.not.isvar("ncluster"))then
-        ncluster = 7
+        ncluster = 6
     end if
     if(.not.isvar("cluster_deg"))then
         cluster_deg = 3
@@ -66,7 +65,7 @@ begin
         members := str_split(members," ") ; split string into array
         do i = 0, dimsizes(members)-1 ; zero-pad to 2 digits
             do while (strlen(members(i)).lt.2)
-                members(i) = "0" + members(i)
+                members(i) = "0" + members(i) ; zero-pad single-digit member
             end do
         end do
         basedir := "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+".EPS_"+ members + ".27km3km/"
@@ -116,6 +115,7 @@ begin
     ; basedir may be an array of strings
     members    := systemfunc("ls " + str_join(basedir+"maxele.63.nc", " "))
     trackfiles  = systemfunc("ls " + str_join(basedir+"fort.22"     , " "))
+    station_files  := systemfunc("ls " + str_join(basedir+"fort.61.nc", " ")) ; 6-min water height at stations
 
     ; hwt2017 ensemble
     ;members    = systemfunc("ls "+basedir+"ens_*/latlon_0.125deg_000km/maxele.63.nc")
@@ -261,16 +261,18 @@ begin
         mres@gsMarkerSizeF = 5.0           
         mres@gsMarkerColor = (/"black"/)   ; choose color
         mres@txFontHeightF = 0.01
-        if(zoom.eq.4)then
-            mres@txJust        = "BottomRight" ; good for SW domain
+        if(zoom.eq.2)then
+            mres@txJust        = "BottomCenter" ; good for SW domain
         end if
-        if(zoom.eq.6)then
+        if(zoom.eq.3)then
             mres@txJust        = "TopLeft" ; good for NE domain
         end if
         gsn_polymarker(wks,map,mlons,mlats,mres)
         gsn_text(wks,map,"   "+mlocs+" ",mlons,mlats,mres)
         do imarker=0,dimsizes(lines)-1
-            ; find index of closest node 
+            ; find index of closest node.
+            ; TODO: use station_files (fort.61.nc) instead? 
+            ; If so, convert water height (zeta) to inundation depth.  
             ; 1-deg longitude is smaller than 1-deg latitude by factor of cos(lat).
             dx = (mlons(imarker) - f->x) * cos(f->y)
             dy = mlats(imarker) - f->y
