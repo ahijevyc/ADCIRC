@@ -1,6 +1,5 @@
 load "/glade/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/work/ahijevyc/ncl/read_atcf.ncl"
-load "/glade/work/ahijevyc/ADCIRC/clusters.ncl"
 load "/glade/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
 
 ; forked from simple_plot.ncl Nov 13 2015
