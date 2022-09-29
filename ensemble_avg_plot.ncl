@@ -1,6 +1,6 @@
 load "/glade/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/work/ahijevyc/ncl/read_atcf.ncl"
-load "/glade/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
+load "/glade/work/ahijevyc/ADCIRC/get_MHHW.ncl";get hgt_MHHW, areaCell, sfc_sub_state, get_ADCIRC_control_str
 
 ; forked from simple_plot.ncl Nov 13 2015
 ; Updated and adapted for hwt2017 ensemble Feb 2018
@@ -36,6 +36,9 @@ begin
     if(.not.isvar("stormname"))then
         stormname = "IRMA"
     end if
+    if(.not.isvar("stride"))then
+        stride=1
+    end if
     if(.not.isvar("ncluster"))then
         ncluster = 6
     end if
@@ -52,8 +55,9 @@ begin
         markers = False
     end if
     ; basedir used to find maxele.63.nc and fort.22 files.
-    basedir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"."+ensemble_str+"/"
+    basedir = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+ensemble_str+"/"
     outdir  = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+modelstr+"/"
+    control_str = get_ADCIRC_control_str(modelstr) 
     if(isvar("cluster"))then
         ;members = get_members(cluster, stormname, 7, 5)
         tmp := str_split(modelstr,".")
@@ -74,7 +78,6 @@ begin
             exit
         end if
     end if
-    stride = 1
     ; zoom level
     if(.not.isdefined("zoom")) then
         zoom = 1
@@ -85,6 +88,10 @@ begin
     if(.not.isvar("minus_astronomical_tide"))then
         minus_astronomical_tide = False
     end if
+    if(.not.isvar("elevationlt"))then
+        elevationlt = 10.0 ; mask elevations >= this value
+    end if
+    elevationlt_string = sprintf("%02.0fm", elevationlt)
     if(.not.isvar("thresh"))then
         thresh = 0.0 ; inundation threshold
     end if
@@ -110,6 +117,15 @@ begin
     res = set_res_mp(res, stormname+"_zoom"+sprintf("%.0f",zoom))
 
 
+    domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
+                   sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF)
+    cluster_str = ""
+    if(isvar("cluster"))then
+        cluster_str = ".cluster" + str_join(cluster_args,"_")
+    end if
+    outfile = outdir+str_sub_str(modelstr,"/",".")+cluster_str+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + \
+              "."+sprintf("stride%02.0f.",stride)+domainString+"."+elevationlt_string+"."+type
+
     ; ECMWF or WRF ensemble or WRF ensemble cluster
     ; basedir may be an array of strings
     members    := systemfunc("ls " + str_join(basedir+"maxele.63.nc", " "))
@@ -127,20 +143,17 @@ begin
     ; perturbed ensemble (where modelstr="nws19", or whatever)
     ; ncl 'modelstr="nws19"' 'ensemble_str="veer"' 'type="total"' thresh=1 ../ensemble_avg_plot.ncl
 
+    control = "/glade/work/ahijevyc/ADCIRC/"+stormname+"/"+control_str+"/maxele.63.nc"
+    f = addfile(control,"r")
+    control_inundation = f->zeta_max + f->depth
+    ; Set missing values to zero. Don't use num() to count non-missing values (zero is not missing but is not True either).
+    control_inundation = where(ismissing(control_inundation),0.,control_inundation)
 
     ensemble =  addfiles(members, "r")
     print("reading "+sprinti("%d ", dimsizes(members))+" members")
     ListSetType(ensemble, "join")
     f = ensemble[0]
-
-    domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
-                   sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF)
-    cluster_str = ""
-    if(isvar("cluster"))then
-        cluster_str = ".cluster" + str_join(cluster_args,"_")
-    end if
-    outfile = outdir+str_sub_str(modelstr,"/",".")+cluster_str+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + \
-              "."+sprintf("stride%02.0f.",stride)+domainString+"."+type
+    k = ind(f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
 
     zeta_max   = ensemble[:]->zeta_max
     depth      = ensemble[:]->depth
@@ -169,9 +182,13 @@ begin
     end if
     if(type.eq."prob")then
         break_thresh = where(inundation.ge.thresh,1,0)
-        wgt = new(dimsizes(members), "float")
-        wgt = 1.
-        x_inundation = 100 * dim_avg_wgt_n_Wrap(break_thresh, wgt, 0, 0) 
+        if(dimsizes(members).gt.1)then
+            wgt = new(dimsizes(members), "float")
+            wgt = 1.
+            x_inundation = 100 * dim_avg_wgt_n_Wrap(break_thresh, wgt, 0, 0) 
+        else
+            x_inundation = 100 * break_thresh
+        end if
         x_inundation@units     = "%"
         res@cnMinLevelValF     =   5.
         res@cnMaxLevelValF     =  95.
@@ -196,7 +213,7 @@ begin
 
     ; Only retain land values and low-lying land nodes below MSL (sfc_sub_state=1, or "startDry" nodes). 
     x_inundation = mask(x_inundation, f->depth.le.0 .or. (sfc_sub_state.eq.1), True)
-    x_inundation@long_name = modelstr+" "+ensemble_str+"~C~ensemble " + type + " maximum inundation >="+thresh_string
+    x_inundation@long_name = modelstr+ensemble_str+"~C~ensemble " + type + " maximum inundation >="+thresh_string
     if(.not.isatt(x_inundation,"units"))then
         x_inundation@units     = zeta_max@units
     end if
@@ -208,6 +225,32 @@ begin
         x_inundation         = mask(x_inundation, ismissing(hgt_MHHW).or.hgt_MHHW.ge.0, True)
         print(num(.not.ismissing(x_inundation))+" inundated nodes after masking nodes below MHHW=0")
     end if
+    x_inundation = mask(x_inundation, (-1 * f->depth).lt.elevationlt, True)
+    x_inundation@elevationlt = elevationlt_string
+    print(num(.not.ismissing(x_inundation))+" inundated nodes after masking elevation >="+elevationlt_string)
+
+    ; Thought about putting this in "prob" block above but wanted to
+    ; filter out water points and low-lying points below MHHW 
+    control_break_thresh = where(control_inundation.ge.thresh,1,0)
+    brier_score = avg((x_inundation(k)/100 - control_break_thresh(k))^2.)
+    es_filename = outfile+".nc"
+    if(fileexists(es_filename))then
+        system("rm " + es_filename)
+    end if
+    fes = addfile(es_filename, "c")
+    fcst := new(dimsizes(k), float)
+    fcst!0 = "node"
+    fcst = x_inundation(k)/100
+    fes->fcst = fcst
+    control := new(dimsizes(k), float)
+    control!0 = "node"
+    control = (/ control_break_thresh(k) /)
+    fes->control = control
+    filevardef(fes, (/"thresh"/), (/"float"/), "ncl_scalar")
+    thresh@units = "m" 
+    fes->thresh = thresh
+    print("making " + es_filename)
+    print(brier_score)
 
 
     wtype    = "png"
@@ -232,13 +275,15 @@ begin
     res@cnFillMode               = "RasterFill"
     res@mpOceanFillColor         = "lightcyan" 
     res@mpInlandWaterFillColor   = "lightcyan" 
+    res@lbBoxMinorExtentF        = 0.20 ; default .33
     res@lbTitleString            = x_inundation@long_name
-    res@lbTitleFontHeightF       = 0.018
+    res@lbTitleFontHeightF       = 0.011
     res@lbTitlePosition          = "Bottom"
 
     ; Don't advance the frame.
     res@gsnFrame = False
 
+    res@gsnStringFontHeightF    = 0.012
     res@mpDataBaseVersion       = "MediumRes" ; "HighRes" has no state borders. "MediumRes" will run faster.
     res@mpLimitMode             = "LatLon"
     res@mpPerimOn               = False

@@ -41,3 +41,37 @@
     sfc_sub_state@long_name = "1 is start-dry node. Converted from 1-based to zero-based node indices."
     sfc_sub_state@source = sfc_sub_state_file
 
+undef("get_ADCIRC_control_str")
+function get_ADCIRC_control_str (modelstr:string)
+begin
+    control_str = "control"
+    ; if you change this here, change in inundation_timeseries.ncl also.
+    if(isStrSubset(modelstr,"nws19")\
+        .or.isStrSubset(modelstr,"coldstart")\
+        .or.isStrSubset(modelstr,".ecic"))then
+        control_str = "nws19.control"
+        if(isStrSubset(modelstr,"2018100812"))then
+            control_str = "nws19.control.2018100812"
+        end if
+    end if
+    if(isStrSubset(modelstr,"nws20")\
+        .or.isStrSubset(modelstr,"ECMWF")\
+        .or.isStrSubset(modelstr,"EPS"))then
+        ; default is "nws20.control.yyyymmddhh"
+        match_ind = str_index_of_substr(modelstr, ".201", -1) ; -1 return last index of where ".201" is found in modelstr
+        init_date = str_get_cols(modelstr, match_ind+1, match_ind+10)
+        control_str = "nws20.control."+init_date
+        if(init_date.ge.2018100500 .and. init_date.le.2018101300)then
+            ; just use the earliest hot-start time for Michael2018
+            control_str = "nws20.control.2018100700"
+        end if
+        if(init_date.ge.2017090512 .and. init_date.le.2017090812)then
+            ; these instances use "_newtides"
+            control_str = "nws20.control_newtides_"+init_date
+        end if
+    end if
+
+    return(control_str)
+end
+
+

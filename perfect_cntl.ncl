@@ -1,6 +1,6 @@
 load "/glade/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/work/ahijevyc/ncl/read_atcf.ncl"
-load "/glade/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
+load "/glade/work/ahijevyc/ADCIRC/get_MHHW.ncl";get hgt_MHHW, areaCell, sfc_sub_state, get_ADCIRC_control_str
 load "/glade/work/ahijevyc/ADCIRC/minus_astronomical_tide.ncl"
 
 ; Compare maximum inundation depth in control and perturbed runs.
@@ -18,7 +18,10 @@ load "/glade/work/ahijevyc/ADCIRC/minus_astronomical_tide.ncl"
 ; fix the other one too.
 
 
+; zoom is an integer that determines how far and where to zoom in. High numbers zoom in more. 
+; parse /glade/work/ahijevyc/ncl/get_field_res.ncl for region definitions. (e.g. "IRMA_zoom2")
 
+ 
 begin
 
     if(.not.isvar("modelstr"))then
@@ -28,32 +31,15 @@ begin
         print("modelstr can't have subdirectories. make modelstr a long string with parts instead")
         exit
     end if
-
-    if(.not.isvar("stormname"))
-        stormname = "IRMA"
+    if(.not.isvar("stormname"))then
+        stormname = "Michael2018"
     end if
     if(.not.isvar("stride"))then
         stride=1
     end if
     basedir = "/glade/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
-    control_str = "control"
-    ; if you change this here, change in inundation_timeseries.ncl also.
-    if(isStrSubset(modelstr,"nws19")\
-        .or.isStrSubset(modelstr,"coldstart")\
-        .or.isStrSubset(modelstr,".ecic"))then
-        control_str = "nws19.control"
-    end if
-    if(isStrSubset(modelstr,"nws20")\
-        .or.isStrSubset(modelstr,"ECMWF")\
-        .or.isStrSubset(modelstr,"EPS"))then
-        if(isStrSubset(modelstr,"2017090512"))then
-            control_str = "nws20.control_newtides_2017090512"
-        end if
-        if(isStrSubset(modelstr,"2017090812"))then
-            control_str = "nws20.control_newtides_2017090812"
-        end if
-    end if
+    control_str = get_ADCIRC_control_str(modelstr)
     obsdir   = str_sub_str(modeldir,modelstr,control_str)
     csedir   = str_sub_str(modeldir,modelstr,"coldstart_extend")
 
@@ -68,6 +54,10 @@ begin
     if(.not.isvar("minus_astronomical_tide"))then
         minus_astronomical_tide = False
     end if
+    if(.not.isvar("elevationlt"))then
+        elevationlt = 10.0 ; mask elevations >= this value
+    end if
+    elevationlt_string = sprintf("%02.0fm", elevationlt)
     if(.not.isvar("thresh"))then
         thresh = 1.0 ; inundation threshold
     end if
@@ -79,6 +69,7 @@ begin
     ; Sanity check for misspelled dryland
     if(.not.any(dryland.eq.(/"MHHW","LMSL"/)))then
         print("Unexpected dryland: "+dryland)
+        print("Expected MHHW or LMSL")
         exit
     end if
 
@@ -96,14 +87,14 @@ begin
 
     f63 = modeldir+"maxele.63.nc"
     print("opening perturbation zeta_max "+f63)
-    f = addfile(f63,"r")
+    maxele_fh = addfile(f63,"r")
 
     domainString = sprintf("%.1fE", res@mpMinLonF) + sprintf("%.1fE", res@mpMaxLonF) + \
                    sprintf("%.1fN", res@mpMinLatF) + sprintf("%.1fN", res@mpMaxLatF) + region
     outfile = outdir+modelstr+".minus_astronomical_tide"+minus_astronomical_tide+"_"+thresh_string+"."+dryland + \
-              "."+sprintf("stride%02.0f.",stride)+domainString+".perfectmodel"
-    iregion = get_iregion(f, region, res)
-    k = ind(iregion .and. f->x .ge.res@mpMinLonF.and.f->x .le.res@mpMaxLonF.and.f->y .ge.res@mpMinLatF.and.f->y .le.res@mpMaxLatF)
+              "."+sprintf("stride%02.0f.",stride)+domainString+"."+elevationlt_string +".perfectmodel"
+    iregion = get_iregion(maxele_fh, region, res)
+    k = ind(iregion .and. maxele_fh->x .ge.res@mpMinLonF.and.maxele_fh->x .le.res@mpMaxLonF.and.maxele_fh->y .ge.res@mpMinLatF.and.maxele_fh->y .le.res@mpMaxLatF)
     
     tmpdir = "/glade/scratch/"+getenv("USER")+"/temp/"
     uniqid = systemfunc("echo $$")
@@ -115,8 +106,8 @@ begin
 
     if(any(ismissing(k)))then
         print("no nodes in zoom domain and/or region?")
-        printMinMax(f->x,False)
-        printMinMax(f->y,False)
+        printMinMax(maxele_fh->x,False)
+        printMinMax(maxele_fh->y,False)
         print(res)
         exit
     end if
@@ -128,7 +119,7 @@ begin
         full_files := array_append_record(full_files, csedir + "maxele.63.nc", 0)
     end if
     ; sfc_sub_state was defined in get_MHHW.ncl
-    copy_VarCoords(f->depth, sfc_sub_state)
+    copy_VarCoords(maxele_fh->depth, sfc_sub_state)
     sfc_sub_state := sfc_sub_state(k)
     hgt_MHHW      := hgt_MHHW(k)
 
@@ -194,6 +185,9 @@ begin
             inundation       = mask(inundation, ismissing(hgt_MHHW).or.hgt_MHHW.ge.0, True)
             print(num(.not.ismissing(inundation))+" inundated nodes after masking nodes below MHHW=0")
         end if
+        inundation = mask(inundation, (-1 * g->depth).lt.elevationlt, True)
+        inundation@elevationlt = elevationlt_string
+        print(num(.not.ismissing(inundation))+" inundated nodes after masking elevation >="+elevationlt_string)
         g->inundation = inundation
     end do
 
@@ -234,12 +228,15 @@ begin
     res@cnLineLabelsOn           = True
     res@cnLineLabelPlacementMode = "Constant"
     res@lbLabelAutoStride        = True
+    res@lbBoxMinorExtentF        = 0.20 ; default .33
     res@lbTitleString            = "maximum inundation (meters)"
-    res@lbTitleFontHeightF       = 0.01
+    res@lbTitleFontHeightF       = 0.011
     res@lbTitlePosition          = "Bottom"
 
-    res@gsnCenterString          = modelstr
-    res@gsnCenterStringOrthogonalPosF = 0.1
+    res@gsnStringFontHeightF     = 0.019 
+    res@gsnCenterString          = str_sub_str(modelstr, ".", "~C~")
+    res@gsnCenterStringOrthogonalPosF = 0.127
+    res@gsnCenterStringParallelPosF = 0.21
     res@gsnRightString           = ""
 
     ; Don't advance the frame.
@@ -339,10 +336,10 @@ begin
     xyres@gsnDraw         = False
     xyres@gsnFrame        = False
     ; this controls the size and location of the plot
-    xyres@vpXF            = 0.77
-    xyres@vpWidthF        = 0.16	    
-    xyres@vpYF            = 0.97
-    xyres@vpHeightF       = 0.16 
+    xyres@vpXF            = 0.67
+    xyres@vpWidthF        = 0.24	    
+    xyres@vpYF            = 0.963
+    xyres@vpHeightF       = 0.24
 
     xyres@gsnMaximize         = False                       ; maximize plot in frame
     xyres@xyMarkLineMode      = "Markers"                   ; choose which have markers
@@ -363,7 +360,7 @@ begin
 
 
     xyres@tiMainString        = "n="+sprintf("%.0f",rc@nptxy)+", r~S~2~N~="+sprintf("%4.2f",r2)+", multiplic. bias="+sprintf("%4.2f",avg(model)/avg(obs))+"~C~scatter index="+sprintf("%4.2f",scatterindex) + ", RMSE="+sprintf("%4.2fm",rmse)
-    xyres@tiYAxisString       = modelstr + "~C~" + model@long_name + "~C~(meters)"
+    xyres@tiYAxisString       = str_sub_str(modelstr, ".", "~C~") + "~C~" + model@long_name + "~C~(meters)"
     xyres@tiXAxisString       = obs_file + "~C~(meters)"
 
     plot  = gsn_csm_xy (wks,obs,model,xyres)    ; create scatterplot

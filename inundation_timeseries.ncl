@@ -6,7 +6,7 @@ load "/glade/work/ahijevyc/ncl/get_length_scale.ncl"
 load "/glade/work/ahijevyc/ncl/get_field_res.ncl"
 load "/glade/work/ahijevyc/ncl/CreateTracks.ncl"
 load "/glade/work/ahijevyc/ncl/read_atcf.ncl"
-load "/glade/work/ahijevyc/ADCIRC/get_MHHW.ncl" ; get hgt_MHHW, areaCell, sfc_sub_state
+load "/glade/work/ahijevyc/ADCIRC/get_MHHW.ncl";get hgt_MHHW, areaCell, sfc_sub_state, get_ADCIRC_control_str
 load "/glade/work/ahijevyc/ADCIRC/minus_astronomical_tide.ncl"
 
 begin
@@ -27,24 +27,7 @@ begin
     end if
     basedir = "/glade/work/ahijevyc/ADCIRC/"
     modeldir = basedir + stormname+"/"+modelstr+"/"
-    control_str = "control"
-    control_str = "nws20.control_newtides_2017090512"
-    ; if you change this here, change in perfect_cntrl.ncl also.
-    if(isStrSubset(modelstr,"nws19")\
-        .or.isStrSubset(modelstr,"coldstart")\
-        .or.isStrSubset(modelstr,".ecic"))then
-        control_str = "nws19.control"
-    end if
-    if(isStrSubset(modelstr,"nws20")\
-        .or.isStrSubset(modelstr,"ECMWF")\
-        .or.isStrSubset(modelstr,"EPS"))then
-        if(isStrSubset(modelstr,"2017090512"))then
-            control_str = "nws20.control_newtides_2017090512"
-        end if
-        if(isStrSubset(modelstr,"2017090812"))then
-            control_str = "nws20.control_newtides_2017090812"
-        end if
-    end if
+    control_str = get_ADCIRC_control_str(modelstr)
 
 
     ; If True, plot only one frame (default False)
