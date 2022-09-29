@@ -1,2 +1,5 @@
 ifort FigureGen49.F90 -DNETCDF -lnetcdf -I ~/src/datetime-fortran/build/include -I /glade/u/home/ahijevyc/include -L /glade/u/home/ahijevyc/lib -ldatetime -o FigureGen49_serial.exe
-mpif90 FigureGen49.F90 -DNETCDF -lnetcdf -I ~/src/datetime-fortran/build/include -I /glade/u/home/ahijevyc/include -L /glade/u/home/ahijevyc/lib -ldatetime -o FigureGen49_parallel.exe
+mpif90 FigureGen49.F90 -DNETCDF -lnetcdf -I ~/src/datetime-fortran/build/include -I /glade/u/home/ahijevyc/include -L /glade/u/home/ahijevyc/lib -ldatetime -DCMPI -o FigureGen49_parallel.exe
+
+
+# For most of 2020, parallel version was limited to core 0000 because I didn't compile with -DCMPI directive.

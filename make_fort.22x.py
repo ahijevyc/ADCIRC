@@ -72,8 +72,8 @@ def print_ncols(x,ncol=8,fill=1013.,fmt="%10.4f"):
         # I think that is what order='C' or row-major order does. This is the default.
         line = ""
         for i,e in enumerate(x.flatten(order='C')):
-            line = line + fmt.format(e)
-            if i % ncol == ncol-1: # TODO: untested with new format string. Used to have curly brackets and no percentage sign: '{:10.4f}'
+            line = line + fmt % e # Not string.format() way
+            if i % ncol == ncol-1: # new format string. Used to have curly brackets and no percentage sign: '{:10.4f}'
                 print(line)
                 line = ""
         if line:

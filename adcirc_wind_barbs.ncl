@@ -17,7 +17,7 @@ begin
 
 	field = "speed_10m"
 	; Plotting domain
-	domain = "Irma"
+	domain = "Michael2018"
     mesh = "nos"
 
 	; Directory with esmf regrid files for this particular mesh 
@@ -26,7 +26,7 @@ begin
 	diri = "/glade/scratch/mpasrt/uni/2017090600/ecic/latlon_0.125deg_025km/"
 	diri = "/glade/scratch/ahijevyc/kowaleski/2017090512/EPS_01/27km9km/"
 	diri = "/glade/scratch/ahijevyc/ECMWF/0p5/2017090800/ens_31/"
-	diri = "/glade/scratch/ahijevyc/ECMWF/0p125/2017090812/PF50/"
+	diri = "/glade/scratch/ahijevyc/ECMWF/0p125/nws19/adeck_scale_Vmax_HollandB_balance_Pmin/2018100812/ens_01/"
 
 	slpfile = diri+"fort.73.nc"
 
@@ -41,7 +41,7 @@ begin
     iTime = 119-42 ; good for init 2017090600 valid 201709100600 fhr=102
     iTime = 116 ; initial 2017090512 valid 201709100900 
     iTime = 65 ; initial 2017090800 valid 201709101800 
-    iTime = 49 ; 
+    iTime = 94 ; (zero-based; frame 95 in FigureGen) Michael 2018 valid 10 Oct 11:30 
     stime = cd_string(time(iTime), "%Y%N%D %H%M")
     print(stime)
     title = stime
