@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>SurgeDat Information Tool</title>
+    
+    <link type="text/css" href="http://code.jquery.com/ui/1.10.3/themes/sunny/jquery-ui.css" rel="Stylesheet" />
+    <link rel="stylesheet" type="text/css" href="http://yui.yahooapis.com/2.9.0/build/fonts/fonts-min.css" />
+    <link rel="stylesheet" type="text/css" href="http://yui.yahooapis.com/2.9.0/build/paginator/assets/skins/sam/paginator.css" />
+    <link rel="stylesheet" type="text/css" href="http://yui.yahooapis.com/2.9.0/build/datatable/assets/skins/sam/datatable.css" />
+    <link rel="Stylesheet" type="text/css" href="./surge_map.css">
+
+    <script type="text/javascript" src="http://yui.yahooapis.com/2.9.0/build/yahoo-dom-event/yahoo-dom-event.js"></script>
+    <script type="text/javascript" src="http://yui.yahooapis.com/2.9.0/build/connection/connection-min.js"></script>
+    <script type="text/javascript" src="http://yui.yahooapis.com/2.9.0/build/json/json-min.js"></script>
+    <script type="text/javascript" src="http://yui.yahooapis.com/2.9.0/build/element/element-min.js"></script>
+    <script type="text/javascript" src="http://yui.yahooapis.com/2.9.0/build/paginator/paginator-min.js"></script>
+    <script type="text/javascript" src="http://yui.yahooapis.com/2.9.0/build/datasource/datasource-min.js"></script>
+    <script type="text/javascript" src="http://yui.yahooapis.com/2.9.0/build/event-delegate/event-delegate-min.js"></script>
+    <script type="text/javascript" src="http://yui.yahooapis.com/2.9.0/build/datatable/datatable-min.js"></script>
+
+    <style type="text/css">
+        #paginated {
+            text-align: center;
+        }
+        #paginated table {
+            margin-left:auto; margin-right:auto;
+        }
+        #paginated, #paginated .yui-dt-loading {
+                text-align: center; background-color: transparent;
+        }
+    </style>
+          <script type="text/javascript" src="http://code.jquery.com/jquery-1.9.1.js"></script>
+    <script type='text/javascript' src='http://code.jquery.com/ui/1.10.3/jquery-ui.js'></script>
+
+    <script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?sensor=false"></script>
+    <script src='https://api.tiles.mapbox.com/mapbox.js/v2.1.4/mapbox.js'></script>
+    <link href='https://api.tiles.mapbox.com/mapbox.js/v2.1.4/mapbox.css' rel='stylesheet'/>
+
+    <!-- <script src="//netdna.bootstrapcdn.com/twitter-bootstrap/2.2.2/js/bootstrap.min.js"></script> -->
+     <script type="text/javascript">
+
+                var map;
+				var markersArray=[];
+				var infowindow=null;
+				var surgeCircle;
+				var chart1;
+				var chart2;
+				
+
+			$(document).ready(function(){
+				L.mapbox.accessToken = 'pk.eyJ1Ijoic3JjYyIsImEiOiJlTGVCUUZJIn0.wtVBLySJsD08rO1jtAQNJg';
+					var map = L.mapbox.map("map_canvas", 'srcc.hinnci74')
+  					.setView([30, -90],4);
+
+  				var markerLayer = L.mapbox.featureLayer().addTo(map);
+      			var markerSurge = L.mapbox.featureLayer().addTo(map);
+
+				var mappedCircles=[];
+				$(function(){
+					$("#accordion").accordion({
+						fillSpace:true
+					});
+				});
+
+				$("#toggle_buffer").change(function(){
+					if($("input:checked").val()==1){
+						showCircle();
+			                }
+					else{
+						clearCircle(); 
+					}
+				});
+
+				
+				var distanceCircle;
+				
+
+				function showCircle(){
+			                if(distanceCircle){
+						distanceCircle.addTo(map);
+			                }
+				}
+				
+				function clearCircle(){
+			                if(distanceCircle){
+						distanceCircle.clearLayers();
+			                }
+				}
+
+				function drawCircle(lat,lon,radius_miles){
+					clearCircle();
+					distanceCircle = L.circle([lat,lon], (radius_miles*1.609)*1000,{
+    					color: '#000000',
+    					opacity: 2,
+    					weight: 2,
+    					fillColor: '#FF0F12',
+    					fillOpacity: 0.25
+						})
+						.bindPopup()
+						.addTo(distanceCircle);
+				}
+
+
+				function dataTableAsCSV(myDataTable) {
+					var i, j, oData,
+						aRecs = myDataTable.getRecordSet().getRecords(),
+						aCols = myDataTable.getColumnSet().keys;
+					//newWin.document.write("<pre>");
+
+					output_str="<pre>";
+					for (i=0; i<aRecs.length; i++) {
+						oData = aRecs[i].getData();
+						for (j=0; j<aCols.length; j++) {
+						    //newWin.document.write( oData[aCols[j].key] + ",");
+						    output_str=output_str+oData[aCols[j].key] + ",";
+						}
+						output_str=output_str + "<br>";
+					}
+					output_str=output_str+"</pre>";
+					$("#csvDialog").dialog({'width':600});
+					$('#csvDialog').append(output_str);	
+				}
+
+				function genTable(url,json_vals){
+					$('#output_data_table').empty();
+			                var myColumnDefs = [
+			                    {key:"Storm Name", label:"Storm Name"},
+			                    {key:"Year", label:"Year"},
+			                    {key:"Lon", label:"Longitude", sortable:true},
+			                    {key:"Lat", label:"Latitude", sortable: true},
+			                    {key:"Storm Tide (ft)", label:"Storm Tide(ft)",sortable:true},
+			                    {key:"Storm Tide (m)", label:"Storm Tide(m)",sortable:true},
+			                    {key:"Surge (ft)", label:"Surge(ft)",sortable:true},
+			                    {key:"Surge (m)", label:"Surge(m)",sortable:true},
+			                    {key:"Location", label:"Location"},
+			                    {key:"Basin", label:"Basin"},
+			                    {key:"State", label:"State"}
+			                ];
+
+
+			                //var myDataSource = new YAHOO.util.DataSource(url);
+			                var myDataSource = new YAHOO.util.DataSource(json_vals);
+			                //myDataSource.responseType = YAHOO.util.DataSource.TYPE_JSON;
+			                myDataSource.responseType = YAHOO.util.DataSource.TYPE_JSARRAY;
+			                myDataSource.responseSchema = {
+			                    //resultsList: "data",
+			                    fields: ["Storm Name","Year","Lon","Lat","Storm Tide (ft)","Storm Tide (m)","Surge (ft)","Surge (m)","Location","Basin","State"]
+			                    //fields: ["Storm Name","Year","Storm Tide (ft)","Storm Tide (m)","Surge (ft)","Surge (m)","Location","Basin","State"]
+			                };
+
+			                var oConfigs = {
+			                        paginator: new YAHOO.widget.Paginator({
+			                            rowsPerPage: 100
+			                        })
+			                };
+			                var myDataTable = new YAHOO.widget.DataTable("output_data_table", myColumnDefs,myDataSource, oConfigs);
+
+					myDataTable.subscribe("rowClickEvent",myDataTable.onEventSelectRow);
+					myDataTable.subscribe("rowClickEvent", function(args){
+						var recordID = myDataTable.getSelectedRows()[0];
+						record = myDataTable.getRecord(recordID);
+						var record_index=myDataTable.getRecordIndex(recordID);
+						lat=json_vals[record_index].Lat;
+						lon=json_vals[record_index].Lon;
+
+						lat=record.getData("Lat");
+						lon=record.getData("Lon");
+						storm_name=record.getData("Storm Name");
+						storm_year=record.getData("Year");
+						surge_ft=record.getData("Surge (ft)");
+						storm_tide_ft=record.getData("Storm Tide (ft)");
+						clearMarkers();
+						createMarker(lat,lon,surge_ft,storm_tide_ft,storm_name,storm_year);
+					});
+					//dataTableAsCSV(myDataTable);	
+			                return {
+			                    oDS: myDataSource,
+			                    oDT: myDataTable
+			                };
+			        }
+
+
+				function createMarker(lat,lon,surge_val,storm_tide_val,storm_name,storm_year){
+					if(isNaN(surge_val)){ surge_val='N/A' };
+					if(isNaN(storm_tide_val)){ storm_tide_val='N/A' };
+					var marker = new L.Marker(new L.LatLng(parseFloat(lat),parseFloat(lon)),{
+            			icon: L.mapbox.marker.icon({
+            			'marker-color' : '#0180B5',
+            			'marker-symbol': 'water',
+            			'marker-size': 'large'
+            			})
+         			})
+          			.bindPopup("Storm="+storm_name+"\nYear="+storm_year+"\nSurge(ft)=" + surge_val +"\nStorm Tide(ft)=" + storm_tide_val)
+          			.addTo(markerLayer);
+          			map.fitBounds(markerLayer.getBounds());
+				}
+
+				function clearMarkers(){
+					if (markersArray.length>0) {
+						for (var i = 0; i < markersArray.length; i++ ) {
+							markerLayer.clearLayers();;
+						}
+					}
+				}
+				
+				$.get('/ws1',function(data) {
+					var jsonResults = JSON.parse(data);
+					var storm_names = [];
+					$('#storm_name option').remove();
+					$('#storm_name').append('<option value="-1">Select A Storm Name</option>');
+					$.each(jsonResults,function(item_indx,item){
+						storm_names.push(item);
+						$('#storm_name').append('<option value="'+item+'">' + item + '</option>');
+					});
+				});
+
+				$("#storm_name").change(function() {
+					storm_name = $('#storm_name option:selected').val();
+					if (storm_name!=-1) {
+						$('#year').empty();
+						$("#accordion").accordion({
+							header:'h3',
+							active: '#section2',
+							autoheight: false,
+							clearstyle: true,
+						});
+						$('#year').append('<option value="-1">Select A Year</option>');
+						$.get('/ws2?storm_name='+storm_name,function(data) {
+							var jsonResults = JSON.parse(data);
+							for (var i=0;i<jsonResults.length;i++) {
+							    var year = jsonResults[i];
+							    $('#year').append('<option value=' + year +'>' + year + '</option>');
+							}	
+						});		
+					}
+				});	
+
+				$("#year").change(function() {
+					storm_name = $('#storm_name').val();
+					year = $('#year').val();		
+					if (year!=-1) {
+						var data_url='/ws3?storm_name='+storm_name+'&year='+year;
+						$.get(data_url,function(data) {
+							json_vals=jQuery.parseJSON(data);
+							genTable(data_url,json_vals);
+							var circleOptions={};
+							removeCircles();
+							clearMarkers();
+							var colorPal=[];
+
+
+							var surgeVals=[];
+							$.each(json_vals,function(indx,elem){
+								//surge_ft=parseFloat(elem['Surge (ft)']);
+								//storm_tide_ft=parseFloat(elem['Storm Tide (ft)']);
+								surge_ft=parseFloat(elem[6]);
+								storm_tide_ft=parseFloat(elem[4]);
+								if(!isNaN(surge_ft)){
+									surgeVals.push(surge_ft);
+								}
+								if(isNaN(surge_ft) && !isNaN(storm_tide_ft)){
+									surgeVals.push(storm_tide_ft);
+								}	
+							});
+							var numRanges=6;
+							max_val=function(array){ 
+								return Math.max.apply(Math,array);
+							}
+							min_val=function(array){ 
+								return Math.min.apply(Math,array);
+							}
+						
+							if(surgeVals.length<=numRanges){
+								numRanges=surgeVals.length;
+								var breakInterval=(max_val(surgeVals)-min_val(surgeVals))/numRanges;
+								var classIntervals=[];
+								for(var i=0;i<numRanges;i++){
+									classIntervals.push(min_val(surgeVals)+i*breakInterval);
+								}
+							}	
+							else {	
+								var breakInterval=(max_val(surgeVals)-min_val(surgeVals))/numRanges;
+								var classIntervals=[];
+								for(var i=0;i<numRanges;i++){
+									classIntervals.push(min_val(surgeVals)+i*breakInterval);
+								}
+							}
+
+							var colorVals=[];
+							var colPal=['#FFEDA0','#FEB24C','#FD8D3C','#FC4E2A','#E31A1C','#B10026'];
+							var all_lats=[];
+							var all_lons=[];
+							$.each(json_vals,function(indx,elem){
+								console.log(elem);
+								var col_val=null;
+								//surge_ft=parseFloat(elem['Surge (ft)']);
+								//storm_tide_ft=parseFloat(elem['Storm Tide (ft)']);
+								surge_ft=parseFloat(elem[6]);
+								storm_tide_ft=parseFloat(elem[4]);
+
+								// if surge obs are missing, replace with storm tide information
+								if(!isNaN(surge_ft) && isNaN(storm_tide_ft)){
+									plot_val=surge_ft;
+								}
+								else if (isNaN(surge_ft) && !isNaN(storm_tide_ft)) { plot_val=storm_tide_ft; }
+								else if (!isNaN(surge_ft) && !isNaN(storm_tide_ft)) { plot_val=surge_ft; }
+								else if (isNaN(surge_ft) && isNaN(storm_tide_ft)) { plot_val=null; }
+								if (isNaN(plot_val)){ col_val = null; }
+								else if(plot_val<classIntervals[0]){ col_val=colPal[0]; }
+								else if(plot_val>=classIntervals[0] && plot_val<classIntervals[1]) {
+									col_val=colPal[1];
+								}
+								else if(plot_val>=classIntervals[1] && plot_val<classIntervals[2]) {
+									col_val=colPal[2];
+								}
+								else if(plot_val>=classIntervals[2] && plot_val<classIntervals[3]) {
+									col_val=colPal[3];
+								}
+								else if(plot_val>=classIntervals[3] && plot_val<classIntervals[4]) {
+									col_val=colPal[4];
+								}
+								else if(plot_val>=classIntervals[4] && plot_val<classIntervals[5]) {
+									col_val=colPal[5];
+								}
+								//lon=parseFloat(elem.Lon);
+								//lat=parseFloat(elem.Lat);
+								lon=parseFloat(elem[2]);
+								lat=parseFloat(elem[3]);
+								all_lats.push(lat);
+								all_lons.push(lon);
+								//surge_ft=parseFloat(elem['Surge (ft)']);
+								
+								if(lon!='' && lat!='' && !isNaN(plot_val)) {
+									var surgeCircle = L.circle([lat,lon],2000,{
+    								color: '#000000',
+    								opacity: 2,
+    								weight: 2,
+    								fillColor: col_val,
+    								fillOpacity: 0.65
+									})
+									.bindPopup('<strong>Lat: '+lat+'<br/>Lon: '+lon+'<br/>Surge(ft): '+surge_ft+'<br/>Storm Tide(ft): '+storm_tide_ft+'<br/>Datum: '+elem[12]+'<br/>Obs Type: '+elem[13]+'</strong>')
+									.addTo(markerSurge);
+									
+								}	
+							});
+							//lat_avg=getAverage(all_lats);	
+							//lon_avg=getAverage(all_lons);
+
+							lat_avg=getMedian(all_lats);	
+							lon_avg=getMedian(all_lons);
+
+							map.setView([lat_avg,lon_avg],7);
+						});
+					}
+				});
+
+
+				function getAverage(arr){
+					total=0;
+					$.each(arr,function(indx,elem){
+						if(!isNaN(elem)){ total+=elem; }
+					});
+					return total/arr.length;
+				}
+
+				function getMedian(arr){
+					arr.sort( function(a,b) {return a - b;} );
+				    var half = Math.floor(arr.length/2);
+				    if(arr.length % 2)
+				        return arr[half];
+				    else
+				        return (arr[half-1] + arr[half]) / 2.0;
+				}
+
+				function removeCircles(){
+					if(mappedCircles.length!=0){
+						for (var i in mappedCircles){
+							mappedCircles[i].setMap(null);
+						}
+					}
+					mappedCircles=[];
+				}
+				});
+
+</script>
+</script>
+
+</head>
+<body class="yui-skin-sam">
+    <div id="menu">
+        <div id="accordion">
+                <h3><a href='#'>Search By Storm Name & Year</a></h3>
+                        <div>
+                                <select id="storm_name" >
+                                        <option value=-1>Choose A Storm</option>
+                                </select>
+                                <select id="year" >
+                                        <option value=-1>Choose A Year</option>
+                                </select>
+                        </div>
+        </div>
+   </div>
+   <div id="output">
+        <div id ="map_canvas"></div>
+        <div id ="output_data_table"></div>
+   </div>
+<div id="return_period_stats"></div>
+<div id="return_period_predictor"></div>
+<!--<div id="csvDialog" title="Output As CSV"><p>CSV Output</p></div>-->
+</body>
+</html>
