@@ -1,0 +1,4 @@
+module load python
+ncar_pylib
+python make_SW_NE_line.py > SW_NE_line.txt
+./FigureGen49_serial.exe -I FloridaSW_NE_line.inp

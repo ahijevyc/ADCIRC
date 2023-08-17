@@ -1,0 +1,13 @@
+
+--------------------------------------------------------
+Model initialization date: 2017090512
+Cluster initialization date: 2017090912
+Polynomial number: 3
+Number of Clusters: 6
+Cluster number requested: 6
+--------------------------------------------------------
+
+Retrieving members for Cluster 6...
+
+  Cluster Number 6 has 11 members: 5 8 16 17 20 26 29 32 38 41 46
+
