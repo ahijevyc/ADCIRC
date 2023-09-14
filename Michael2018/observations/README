@@ -1,0 +1,17 @@
+# Create scatterplot of model and observed water heights.
+
+download high water marks, and rapid deployment gage and pressure transducer data with obs_adcirc.py
+% python obs_adcirc.py
+
+Not sure how Google Sheet was created.
+
+zeta_max.ncl reads netCDF version of Google Sheet (read and saved by get_obs.py) or output from obs_adcirc.py, HWMs.Event287.nc.
+
+Hand off to zeta_max.ncl
+ncl 'modeldir="$TMPDIR/nos/output/Michael2018/bt/work/"' zeta_max.ncl
+
+
+Old workflow for obs_adcirc.py below.
+wget -O HWMs.Event287.csv "https://stn.wim.usgs.gov/STNServices/HWMs/FilteredHWMs.csv?Event=287&States=&County=&HWMType=&HWMQuality=&HWMEnvironment=&SurveyComplete=&StillWater="
+had to fix broken lines in 'https://stn.wim.usgs.gov/STNServices/Instruments/FilteredInstruments.csv?Event=287&States=&County=&SensorType=&CurrentStatus=&CollectionCondition=&DeploymentType='
+mv FilteredInstruments.csv?Event=287&States=&County=&SensorType=&CurrentStatus=&CollectionCondition=&DeploymentType= Sensor.Event287.csv
