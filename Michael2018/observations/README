@@ -1,4 +1,5 @@
-# Create scatterplot of model and observed water heights.
+## THIS IS SUPERSEDED BY README IN STORM_SURGE_PREDICTION REPO ##
+## Create scatterplot of model and observed water heights.
 
 download high water marks, and rapid deployment gage and pressure transducer data with obs_adcirc.py
 % python obs_adcirc.py
