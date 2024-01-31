@@ -1,1 +1,0 @@
-/glade/scratch/ahijevyc/storm_surge_prediction/scripts/get_MHHW.ncl

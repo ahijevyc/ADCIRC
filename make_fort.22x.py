@@ -1,1 +1,0 @@
-/glade/scratch/ahijevyc/storm_surge_prediction/scripts/make_fort.22x.py
