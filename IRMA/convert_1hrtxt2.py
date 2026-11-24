@@ -5,7 +5,7 @@ import datetime
 import sys
 import glob
 import os
-import atcf
+from ahijevyc import atcf
 """
 Convert Alex Kowaleski's TC tracks to ATCF
 
